@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
+import re
 import struct
 import sys
 import zipfile
@@ -15,7 +17,8 @@ from xml.etree import ElementTree as ET
 
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-REQUIRED_KRITA_LAYERS = {"AI素材", "文字"}
+REQUIRED_KRITA_LAYERS = {"AI素材", "文字", "フキダシ"}
+TEXTLESS_KRITA_LAYERS = {"文字", "フキダシ"}
 FORBIDDEN_TEXT_MARKERS = (
     "text (verbatim)",
     "typography:",
@@ -122,7 +125,7 @@ def validate_visual_prompt(path: Path) -> list[Finding]:
                 Finding(
                     "PROMPT_BAKES_TEXT",
                     path,
-                    f"found '{marker}'; narration and lettering must be added in Krita",
+                    f"found '{marker}'; Comfy prompts must describe visuals only",
                 )
             )
     if "no text" not in lowered and "文字なし" not in text:
@@ -171,34 +174,199 @@ def validate_comfy_png(path: Path, prompt_path: Path) -> list[Finding]:
     return []
 
 
-def _krita_layer_names(path: Path) -> set[str]:
-    with zipfile.ZipFile(path) as archive:
+def _lzf_decompress(data: bytes, expected_size: int) -> bytes:
+    output = bytearray()
+    cursor = 0
+    while cursor < len(data):
+        control = data[cursor]
+        cursor += 1
+        if control < 32:
+            length = control + 1
+            end = cursor + length
+            if end > len(data):
+                raise ValueError("truncated LZF literal")
+            output.extend(data[cursor:end])
+            cursor = end
+            continue
+
+        length = control >> 5
+        reference = len(output) - ((control & 0x1F) << 8) - 1
+        if length == 7:
+            if cursor >= len(data):
+                raise ValueError("truncated LZF length")
+            length += data[cursor]
+            cursor += 1
+        if cursor >= len(data):
+            raise ValueError("truncated LZF reference")
+        reference -= data[cursor]
+        cursor += 1
+        length += 2
+        if reference < 0:
+            raise ValueError("invalid LZF reference")
+        for _ in range(length):
+            if reference >= len(output):
+                raise ValueError("invalid LZF copy")
+            output.append(output[reference])
+            reference += 1
+        if len(output) > expected_size:
+            raise ValueError("LZF tile exceeds its declared size")
+    if len(output) != expected_size:
+        raise ValueError(
+            f"LZF tile decoded to {len(output)} bytes; expected {expected_size}"
+        )
+    return bytes(output)
+
+
+def _read_ascii_header(stream: io.BytesIO, label: str) -> str:
+    line = stream.readline()
+    if not line.endswith(b"\n"):
+        raise ValueError(f"truncated Krita {label} header")
+    try:
+        return line[:-1].decode("ascii")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"invalid Krita {label} header") from exc
+
+
+def _paint_layer_is_empty(archive: zipfile.ZipFile, filename: str) -> bool:
+    suffix = f"/layers/{filename}"
+    matches = [name for name in archive.namelist() if name.endswith(suffix)]
+    if len(matches) != 1:
+        raise ValueError(f"could not locate pixel data for layer file '{filename}'")
+    pixel_member = matches[0]
+    default_member = pixel_member + ".defaultpixel"
+    if default_member not in archive.namelist():
+        raise ValueError(f"default pixel is missing for layer file '{filename}'")
+    default_pixel = archive.read(default_member)
+
+    stream = io.BytesIO(archive.read(pixel_member))
+    if _read_ascii_header(stream, "version") != "VERSION 2":
+        raise ValueError("unsupported Krita paint-layer version")
+    width_header = _read_ascii_header(stream, "tile width")
+    height_header = _read_ascii_header(stream, "tile height")
+    pixel_header = _read_ascii_header(stream, "pixel size")
+    data_header = _read_ascii_header(stream, "tile count")
+    try:
+        tile_width = int(width_header.removeprefix("TILEWIDTH "))
+        tile_height = int(height_header.removeprefix("TILEHEIGHT "))
+        pixel_size = int(pixel_header.removeprefix("PIXELSIZE "))
+        tile_count = int(data_header.removeprefix("DATA "))
+    except ValueError as exc:
+        raise ValueError("invalid Krita paint-layer dimensions") from exc
+    if not width_header.startswith("TILEWIDTH ") or not height_header.startswith("TILEHEIGHT "):
+        raise ValueError("invalid Krita tile-size headers")
+    if not pixel_header.startswith("PIXELSIZE ") or not data_header.startswith("DATA "):
+        raise ValueError("invalid Krita pixel-data headers")
+    if pixel_size != len(default_pixel):
+        raise ValueError("Krita default pixel size does not match layer pixel size")
+
+    expected_size = tile_width * tile_height * pixel_size
+    empty_tile = default_pixel * (tile_width * tile_height)
+    for _ in range(tile_count):
+        tile_header = _read_ascii_header(stream, "tile")
+        match = re.fullmatch(r"-?\d+,-?\d+,([A-Z0-9]+),(\d+)", tile_header)
+        if not match:
+            raise ValueError(f"invalid Krita tile header: {tile_header!r}")
+        compression, encoded_size_text = match.groups()
+        encoded_size = int(encoded_size_text)
+        encoded = stream.read(encoded_size)
+        if len(encoded) != encoded_size:
+            raise ValueError("truncated Krita tile payload")
+        if compression == "RAW":
+            decoded = encoded
+            if len(decoded) != expected_size:
+                raise ValueError("RAW tile size does not match its declared dimensions")
+        elif compression == "LZF":
+            if not encoded:
+                raise ValueError("empty Krita LZF tile payload")
+            # Krita prefixes stored LZF tiles with one compressor-format byte.
+            decoded = _lzf_decompress(encoded[1:], expected_size)
+        else:
+            raise ValueError(f"unsupported Krita tile compression: {compression}")
+        if decoded != empty_tile:
+            return False
+    return True
+
+
+def _krita_layers(path: Path) -> tuple[set[str], dict[str, dict[str, str]], zipfile.ZipFile]:
+    archive = zipfile.ZipFile(path)
+    try:
         names = set(archive.namelist())
         if archive.read("mimetype") != b"application/x-krita":
             raise ValueError("mimetype is not application/x-krita")
         if "maindoc.xml" not in names:
             raise ValueError("maindoc.xml does not exist")
         document = ET.fromstring(archive.read("maindoc.xml"))
-        return {element.attrib["name"] for element in document.iter() if "name" in element.attrib}
+        layers = {
+            element.attrib["name"]: dict(element.attrib)
+            for element in document.iter()
+            if "name" in element.attrib
+        }
+        return set(layers), layers, archive
+    except Exception:
+        archive.close()
+        raise
 
 
-def validate_krita_source(path: Path) -> list[Finding]:
+def validate_krita_source(
+    path: Path, *, empty_layers: set[str] | None = None
+) -> list[Finding]:
     if path.suffix.lower() != ".kra":
         return [Finding("KRITA_FORMAT_REQUIRED", path, "editable manuscript must use Krita .kra format")]
     try:
-        names = _krita_layer_names(path)
+        names, layers, archive = _krita_layers(path)
     except (KeyError, OSError, ValueError, zipfile.BadZipFile, ET.ParseError) as exc:
         return [Finding("KRITA_SOURCE_INVALID", path, str(exc))]
-    missing = sorted(REQUIRED_KRITA_LAYERS - names)
-    if missing:
-        return [
-            Finding(
-                "KRITA_LAYERS_MISSING",
-                path,
-                f"required editable layers are missing: {', '.join(missing)}",
-            )
-        ]
-    return []
+    try:
+        missing = sorted(REQUIRED_KRITA_LAYERS - names)
+        if missing:
+            return [
+                Finding(
+                    "KRITA_LAYERS_MISSING",
+                    path,
+                    f"required editable layers are missing: {', '.join(missing)}",
+                )
+            ]
+        findings: list[Finding] = []
+        for layer_name in sorted(empty_layers or set()):
+            layer = layers.get(layer_name)
+            if layer is None:
+                continue
+            if layer.get("nodetype") != "paintlayer" or not layer.get("filename"):
+                findings.append(
+                    Finding(
+                        "KRITA_EMPTY_LAYER_UNVERIFIABLE",
+                        path,
+                        f"cannot prove that required-empty layer '{layer_name}' is empty",
+                    )
+                )
+                continue
+            try:
+                is_empty = _paint_layer_is_empty(archive, layer["filename"])
+            except ValueError as exc:
+                findings.append(
+                    Finding(
+                        "KRITA_EMPTY_LAYER_UNVERIFIABLE",
+                        path,
+                        f"cannot inspect required-empty layer '{layer_name}': {exc}",
+                    )
+                )
+                continue
+            if not is_empty:
+                findings.append(
+                    Finding(
+                        "KRITA_TEXT_LAYER_NOT_EMPTY",
+                        path,
+                        f"textless image policy requires layer '{layer_name}' to be empty",
+                    )
+                )
+        return findings
+    finally:
+        archive.close()
+
+
+def _requires_textless_image(settings: dict[str, Any]) -> bool:
+    policy = str(settings.get("image_text_policy", "")).strip().lower()
+    return bool(re.match(r"^(none|no-text|textless)\b", policy))
 
 
 def _page_source(project: Path, stem: str, one_panel_per_page: bool) -> Path | None:
@@ -233,6 +401,18 @@ def validate_project(project: Path) -> list[Finding]:
             )
         )
     one_panel_per_page = settings.get("format") == "one-post-one-panel"
+    requires_textless_image = _requires_textless_image(settings)
+
+    if requires_textless_image:
+        lettering_dir = project / "lettering"
+        for lettering in sorted(lettering_dir.glob("*.txt")):
+            findings.append(
+                Finding(
+                    "TEXT_INPUT_FORBIDDEN",
+                    lettering,
+                    "textless image policy forbids lettering inputs; publish prose outside the image",
+                )
+            )
 
     prompts_dir = project / "prompts"
     for prompt in sorted(prompts_dir.glob("*.txt")):
@@ -257,7 +437,12 @@ def validate_project(project: Path) -> list[Finding]:
                 )
             )
         else:
-            findings.extend(validate_krita_source(source))
+            findings.extend(
+                validate_krita_source(
+                    source,
+                    empty_layers=TEXTLESS_KRITA_LAYERS if requires_textless_image else None,
+                )
+            )
 
     export_dir = project / "export"
     exports = sorted(path for path in export_dir.glob("*.*") if path.suffix.lower() in {".png", ".jpg", ".jpeg"})
@@ -305,6 +490,7 @@ def parser() -> argparse.ArgumentParser:
     image.add_argument("--prompt", type=Path, required=True)
     source = commands.add_parser("check-krita", help="verify a layered Krita .kra manuscript")
     source.add_argument("--source", type=Path, required=True)
+    source.add_argument("--empty-layer", action="append", default=[])
     return result
 
 
@@ -318,7 +504,9 @@ def main() -> int:
         return _print_result(validate_visual_prompt(subject), subject)
     if args.command == "check-krita":
         subject = args.source.resolve()
-        return _print_result(validate_krita_source(subject), subject)
+        return _print_result(
+            validate_krita_source(subject, empty_layers=set(args.empty_layer)), subject
+        )
     subject = args.image.resolve()
     findings = validate_visual_prompt(args.prompt.resolve())
     if not findings:

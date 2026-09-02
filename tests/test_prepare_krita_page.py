@@ -74,13 +74,12 @@ class PrepareKritaPageTests(unittest.TestCase):
                 PAGE.prepare_page(template, art, output)
             self.assertEqual(output.read_bytes(), b"keep")
 
-    def test_line_art_and_lettering_are_separate_layers(self):
+    def test_line_art_is_separate_and_text_layer_stays_empty(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             template = root / "template.ora"
             art = root / "002.png"
             line_art = root / "002-control.png"
-            narration = root / "002.txt"
             output = root / "prepared.ora"
             TEMPLATE.create_template(
                 template,
@@ -95,18 +94,14 @@ class PrepareKritaPageTests(unittest.TestCase):
             for offset in range(3):
                 guide.putpixel((60 + offset, 100), (0, 0, 0))
             guide.save(line_art)
-            narration.write_text("Drafting practice", encoding="utf-8")
-
-            PAGE.prepare_page(
-                template, art, output, line_art=line_art, narration=narration
-            )
+            PAGE.prepare_page(template, art, output, line_art=line_art)
 
             with zipfile.ZipFile(output) as archive:
                 line_layer = Image.open(io.BytesIO(archive.read("data/layer-04.png"))).convert("RGBA")
                 text_layer = Image.open(io.BytesIO(archive.read("data/layer-01.png"))).convert("RGBA")
                 stack = archive.read("stack.xml").decode("utf-8")
             self.assertIsNotNone(line_layer.getbbox())
-            self.assertIsNotNone(text_layer.getbbox())
+            self.assertIsNone(text_layer.getbbox())
             self.assertIn('name="AI素材"', stack)
             self.assertIn('visibility="hidden"', stack)
 

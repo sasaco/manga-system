@@ -40,25 +40,59 @@ def test_png(prompt: str | None = None) -> bytes:
     return MODULE.PNG_SIGNATURE + b"".join(chunks)
 
 
-def write_krita_source(path: Path) -> None:
-    document = b'<DOC><IMAGE><layer name="AI\xe7\xb4\xa0\xe6\x9d\x90"/><layer name="\xe6\x96\x87\xe5\xad\x97"/></IMAGE></DOC>'
+def paint_layer_data(pixel: bytes, compression: str = "RAW") -> bytes:
+    if compression == "RAW":
+        encoded = pixel
+    elif compression == "LZF":
+        encoded = b"\x01" + bytes([len(pixel) - 1]) + pixel
+    else:
+        raise ValueError(compression)
+    return (
+        b"VERSION 2\nTILEWIDTH 1\nTILEHEIGHT 1\nPIXELSIZE 4\nDATA 1\n"
+        + f"0,0,{compression},{len(encoded)}\n".encode()
+        + encoded
+    )
+
+
+def write_krita_source(
+    path: Path,
+    *,
+    text_pixel: bytes | None = None,
+    balloon_pixel: bytes | None = None,
+    compression: str = "RAW",
+) -> None:
+    document = """<DOC><IMAGE>
+        <layer name="AI素材" filename="layer1" nodetype="paintlayer"/>
+        <layer name="文字" filename="layer2" nodetype="paintlayer"/>
+        <layer name="フキダシ" filename="layer3" nodetype="paintlayer"/>
+    </IMAGE></DOC>""".encode()
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("mimetype", "application/x-krita")
         archive.writestr("maindoc.xml", document)
+        for filename, pixel in (
+            ("layer1", b"\x00\x00\x00\x00"),
+            ("layer2", text_pixel or b"\x00\x00\x00\x00"),
+            ("layer3", balloon_pixel or b"\x00\x00\x00\x00"),
+        ):
+            archive.writestr(
+                f"data/layers/{filename}", paint_layer_data(pixel, compression)
+            )
+            archive.writestr(f"data/layers/{filename}.defaultpixel", b"\x00\x00\x00\x00")
 
 
 class ProductionGuardTests(unittest.TestCase):
-    def make_project(self, root: Path, prompt: str) -> Path:
+    def make_project(self, root: Path, prompt: str, *, textless: bool = False) -> Path:
         project = root / "project"
         for relative in ("prompts", "panels/selected", "pages", "export"):
             (project / relative).mkdir(parents=True, exist_ok=True)
+        settings = {
+            "format": "one-post-one-panel",
+            "workflow": {"generator": "comfy", "finisher": "krita"},
+        }
+        if textless:
+            settings["image_text_policy"] = "none; publish prose outside the image"
         (project / "project.json").write_text(
-            json.dumps(
-                {
-                    "format": "one-post-one-panel",
-                    "workflow": {"generator": "comfy", "finisher": "krita"},
-                }
-            ),
+            json.dumps(settings),
             encoding="utf-8",
         )
         (project / "prompts" / "001.txt").write_text(prompt, encoding="utf-8")
@@ -107,6 +141,60 @@ class ProductionGuardTests(unittest.TestCase):
             source.write_bytes(b"not relevant")
             findings = MODULE.validate_krita_source(source)
             self.assertEqual([finding.code for finding in findings], ["KRITA_FORMAT_REQUIRED"])
+
+    def test_textless_project_rejects_lettering_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = self.make_project(
+                Path(directory), "minimal stick figures, no text", textless=True
+            )
+            lettering = project / "lettering" / "001.txt"
+            lettering.parent.mkdir()
+            lettering.write_text("This belongs in the post", encoding="utf-8")
+            codes = {finding.code for finding in MODULE.validate_project(project)}
+            self.assertIn("TEXT_INPUT_FORBIDDEN", codes)
+
+    def test_textless_project_rejects_nonempty_text_layer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            prompt_text = "minimal stick figures, no text"
+            project = self.make_project(Path(directory), prompt_text, textless=True)
+            (project / "panels" / "selected" / "001.png").write_bytes(test_png(prompt_text))
+            write_krita_source(
+                project / "pages" / "001.kra", text_pixel=b"\x00\x00\x00\xff"
+            )
+            (project / "export" / "001.png").write_bytes(test_png())
+            codes = {finding.code for finding in MODULE.validate_project(project)}
+            self.assertIn("KRITA_TEXT_LAYER_NOT_EMPTY", codes)
+
+    def test_textless_project_rejects_nonempty_balloon_layer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "001.kra"
+            write_krita_source(source, balloon_pixel=b"\x00\x00\x00\xff")
+            findings = MODULE.validate_krita_source(
+                source, empty_layers=MODULE.TEXTLESS_KRITA_LAYERS
+            )
+            self.assertTrue(
+                any("'フキダシ'" in finding.message for finding in findings)
+            )
+
+    def test_textless_project_accepts_empty_text_and_balloon_layers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            prompt_text = "minimal stick figures, no text"
+            project = self.make_project(Path(directory), prompt_text, textless=True)
+            (project / "panels" / "selected" / "001.png").write_bytes(test_png(prompt_text))
+            write_krita_source(project / "pages" / "001.kra")
+            (project / "export" / "001.png").write_bytes(test_png())
+            self.assertEqual(MODULE.validate_project(project), [])
+
+    def test_textless_project_accepts_empty_lzf_layers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "001.kra"
+            write_krita_source(source, compression="LZF")
+            self.assertEqual(
+                MODULE.validate_krita_source(
+                    source, empty_layers=MODULE.TEXTLESS_KRITA_LAYERS
+                ),
+                [],
+            )
 
 
 if __name__ == "__main__":

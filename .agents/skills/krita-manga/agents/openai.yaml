@@ -1,0 +1,4 @@
+interface:
+  display_name: "Krita Manga"
+  short_description: "このrepoのKritaマンガ原稿を安全に編集・変換・検証する"
+  default_prompt: "Use $krita-manga to edit and verify a Krita manga manuscript in this repository."

@@ -188,6 +188,8 @@ function New-KritaManuscript([string]$Name, [string]$PanelNumber) {
     $selected = Join-Path $projectPath "panels\selected\$PanelNumber.png"
     if (-not (Test-Path -LiteralPath $selected)) { throw "Selected panel not found: $selected" }
     $settings = Get-Content -LiteralPath (Join-Path $projectPath 'project.json') -Raw | ConvertFrom-Json
+    $imageTextPolicy = [string]$settings.image_text_policy
+    $requiresTextlessImage = $imageTextPolicy -match '^\s*(none|no-text|textless)\b'
     $templateName = if ($settings.page_template) { [string]$settings.page_template } else { [string]$Config.krita_template }
     $template = if ([System.IO.Path]::IsPathRooted($templateName)) {
         [System.IO.Path]::GetFullPath($templateName)
@@ -223,8 +225,8 @@ function New-KritaManuscript([string]$Name, [string]$PanelNumber) {
             $prepareArguments += @('--line-art', $lineArt)
         }
         $narration = Join-Path $projectPath "lettering\$PanelNumber.txt"
-        if (Test-Path -LiteralPath $narration) {
-            $prepareArguments += @('--narration', $narration)
+        if ($requiresTextlessImage -and (Test-Path -LiteralPath $narration)) {
+            throw "Textless image policy forbids lettering input: $narration. Put prose in the post text."
         }
         Invoke-UvPython -WithPackages @('pillow') -PythonArguments $prepareArguments
 
@@ -244,10 +246,16 @@ function New-KritaManuscript([string]$Name, [string]$PanelNumber) {
         if ($process.ExitCode -ne 0) { throw "Krita conversion failed (exit $($process.ExitCode))." }
         if (-not (Test-Path -LiteralPath $temporaryKra)) { throw 'Krita did not create the .kra manuscript.' }
 
-        Invoke-UvPython -PythonArguments @(
+        $checkArguments = @(
             (Resolve-RepoPath 'scripts\production_guard.py'),
             'check-krita', '--source', $temporaryKra
         )
+        if ($requiresTextlessImage) {
+            $textLayerName = [string]([char]0x6587) + [char]0x5B57
+            $balloonLayerName = [string]([char]0x30D5) + [char]0x30AD + [char]0x30C0 + [char]0x30B7
+            $checkArguments += @('--empty-layer', $textLayerName, '--empty-layer', $balloonLayerName)
+        }
+        Invoke-UvPython -PythonArguments $checkArguments
         Move-Item -LiteralPath $temporaryKra -Destination $manuscript
         Write-Host "Created editable Krita manuscript: $manuscript" -ForegroundColor Green
     }
