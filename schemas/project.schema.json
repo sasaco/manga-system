@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manga-system.local/schemas/project.schema.json",
+  "title": "manga-system project",
+  "type": "object",
+  "required": [
+    "title",
+    "slug",
+    "page_template",
+    "manuscript_format",
+    "image_text_policy",
+    "workflow",
+    "status"
+  ],
+  "properties": {
+    "title": { "type": "string", "minLength": 1 },
+    "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" },
+    "created": { "type": "string" },
+    "platform": { "type": "string" },
+    "publication": { "type": "string" },
+    "format": { "type": "string" },
+    "canvas": { "type": "string" },
+    "page_template": { "type": "string", "minLength": 1 },
+    "manuscript_format": { "const": "kra" },
+    "image_text_policy": {
+      "enum": ["textless", "manual-krita-text"]
+    },
+    "reading_direction": { "type": "string" },
+    "workflow": {
+      "type": "object",
+      "required": ["generator", "finisher"],
+      "properties": {
+        "generator": { "const": "comfy" },
+        "finisher": { "const": "krita" }
+      },
+      "additionalProperties": false
+    },
+    "series_bible": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": [
+        "draft",
+        "in-production",
+        "needs-comfy-regeneration",
+        "ready",
+        "complete",
+        "published"
+      ]
+    }
+  },
+  "additionalProperties": true
+}
+

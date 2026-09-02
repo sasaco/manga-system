@@ -1,13 +1,14 @@
 {
   "title": "作品タイトル",
-  "slug": "_template",
+  "slug": "template",
   "created": "",
   "page_template": "instagram-portrait.ora",
   "manuscript_format": "kra",
+  "image_text_policy": "manual-krita-text",
   "reading_direction": "right-to-left",
   "workflow": {
     "generator": "comfy",
     "finisher": "krita"
   },
-  "status": "name"
+  "status": "draft"
 }

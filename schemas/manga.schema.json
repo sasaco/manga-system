@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manga-system.local/schemas/manga.schema.json",
+  "title": "manga-system configuration",
+  "type": "object",
+  "required": ["version", "projects_dir", "krita_template", "workflow_policy", "comfy"],
+  "properties": {
+    "version": { "const": 2 },
+    "projects_dir": { "type": "string", "minLength": 1 },
+    "krita_template": { "type": "string", "minLength": 1 },
+    "workflow_policy": {
+      "type": "object",
+      "required": [
+        "generator",
+        "finisher",
+        "allow_external_selected_images",
+        "require_comfy_png_metadata",
+        "require_textless_generation_prompt",
+        "require_krita_source",
+        "krita_manuscript_format",
+        "require_krita_export",
+        "require_visual_review_receipt",
+        "ready_episode_statuses",
+        "required_comfy_node_types"
+      ],
+      "properties": {
+        "generator": { "const": "comfy" },
+        "finisher": { "const": "krita" },
+        "allow_external_selected_images": { "const": false },
+        "require_comfy_png_metadata": { "const": true },
+        "require_textless_generation_prompt": { "const": true },
+        "require_krita_source": { "const": true },
+        "krita_manuscript_format": { "const": "kra" },
+        "require_krita_export": { "const": true },
+        "require_visual_review_receipt": { "const": true },
+        "ready_episode_statuses": {
+          "type": "array",
+          "items": { "enum": ["ready", "complete", "published"] },
+          "minItems": 3,
+          "uniqueItems": true
+        },
+        "required_comfy_node_types": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "comfy": {
+      "type": "object",
+      "required": [
+        "server",
+        "workflow",
+        "width",
+        "height",
+        "steps",
+        "cfg",
+        "sampler",
+        "scheduler",
+        "checkpoint",
+        "negative_prompt"
+      ],
+      "properties": {
+        "server": { "type": "string", "pattern": "^https?://" },
+        "workflow": { "type": "string", "minLength": 1 },
+        "width": { "type": "integer", "minimum": 64 },
+        "height": { "type": "integer", "minimum": 64 },
+        "steps": { "type": "integer", "minimum": 1 },
+        "cfg": { "type": "number", "exclusiveMinimum": 0 },
+        "sampler": { "type": "string", "minLength": 1 },
+        "scheduler": { "type": "string", "minLength": 1 },
+        "checkpoint": { "type": "string", "minLength": 1 },
+        "negative_prompt": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

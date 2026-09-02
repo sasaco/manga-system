@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "panel": "003",
+  "reviewer": "Codex",
+  "reviewed_at": "2026-09-02T17:10:39.481969+00:00",
+  "checks": {
+    "export_has_no_visible_text": true,
+    "krita_merged_has_no_visible_text": true,
+    "selected_has_no_visible_text": true
+  },
+  "artifacts": {
+    "selected": {
+      "path": "panels/selected/003.png",
+      "sha256": "a13901e7915c81f1198a185ab532e75c995a8cec961139c91fdce5f0fa425749"
+    },
+    "kra": {
+      "path": "pages/003.kra",
+      "sha256": "ae9c8280795d588e0a6a9c66efec713572914b59658d029c9d001d649e6126e0"
+    },
+    "export": {
+      "path": "export/003.png",
+      "sha256": "7e5fb9575ca9692b2ba70998b987cce51ca1a230246938c80496f6f745dc24e1"
+    }
+  }
+}

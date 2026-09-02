@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
 import sys
@@ -82,8 +83,16 @@ def choose_controlnet(server: str, requested: str | None) -> str:
     return choices[0]
 
 
+def control_upload_name(path: Path) -> str:
+    """Return a deterministic, content-addressed Comfy input name."""
+    path = path.resolve()
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+    return f"manga-{digest}-{path.name}"
+
+
 def upload_image(server: str, path: Path) -> str:
     path = path.resolve()
+    upload_name = control_upload_name(path)
     boundary = f"----manga-system-{uuid.uuid4().hex}"
     newline = b"\r\n"
     body = bytearray()
@@ -95,13 +104,13 @@ def upload_image(server: str, path: Path) -> str:
 
     body.extend(f"--{boundary}".encode("ascii") + newline)
     body.extend(
-        f'Content-Disposition: form-data; name="image"; filename="{path.name}"'.encode("utf-8")
+        f'Content-Disposition: form-data; name="image"; filename="{upload_name}"'.encode("utf-8")
         + newline
     )
     body.extend(b"Content-Type: image/png" + newline + newline)
     body.extend(path.read_bytes() + newline)
     field("type", "input")
-    field("overwrite", "true")
+    field("overwrite", "false")
     body.extend(f"--{boundary}--".encode("ascii") + newline)
 
     request = urllib.request.Request(
@@ -168,10 +177,14 @@ def download_output(server: str, image: dict[str, str], destination: Path) -> No
         {"filename": image["filename"], "subfolder": image.get("subfolder", ""), "type": image.get("type", "output")}
     )
     url = server.rstrip("/") + "/view?" + query
+    temporary = destination.with_suffix(destination.suffix + ".part")
     try:
         with urllib.request.urlopen(url, timeout=30) as response:
-            destination.write_bytes(response.read())
-    except (urllib.error.URLError, TimeoutError) as exc:
+            payload = response.read()
+        temporary.write_bytes(payload)
+        temporary.replace(destination)
+    except (OSError, urllib.error.URLError, TimeoutError) as exc:
+        temporary.unlink(missing_ok=True)
         raise ComfyError(f"生成画像を取得できません: {url}\n{exc}") from exc
 
 

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('doctor', 'new', 'open', 'generate', 'compose', 'validate', 'help')]
+    [ValidateSet('doctor', 'new', 'open', 'generate', 'compose', 'review', 'validate', 'check', 'help')]
     [string]$Command = 'help',
     [string]$Project,
     [string]$Title,
@@ -10,7 +10,9 @@ param(
     [string]$ControlImage = '',
     [string]$ControlNet = '',
     [double]$ControlStrength = 1.0,
-    [long]$Seed = -1
+    [long]$Seed = -1,
+    [string]$Reviewer = '',
+    [switch]$ConfirmNoVisibleText
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,14 +30,20 @@ function Invoke-UvPython {
     )
     $uv = Get-Command uv -ErrorAction SilentlyContinue
     if (-not $uv) { throw 'uv not found. Install uv or add it to PATH.' }
-    $uvArguments = @('run')
+    $uvArguments = @('run', '--locked')
     foreach ($package in $WithPackages) {
         $uvArguments += @('--with', $package)
     }
     $uvArguments += 'python'
     $uvArguments += $PythonArguments
-    & $uv.Source @uvArguments
-    if ($LASTEXITCODE -ne 0) { throw "uv Python command failed (exit $LASTEXITCODE)" }
+    Push-Location -LiteralPath $RepoRoot
+    try {
+        & $uv.Source @uvArguments
+        if ($LASTEXITCODE -ne 0) { throw "uv Python command failed (exit $LASTEXITCODE)" }
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 function Find-Krita {
@@ -154,7 +162,9 @@ function New-MangaProject {
     $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $settingsPath -Encoding utf8
 
     $scriptPath = Join-Path $destination 'script.yaml'
-    (Get-Content -LiteralPath $scriptPath -Raw) -replace '(?m)^title:.*$', "title: `"$DisplayTitle`"" |
+    $safeTitle = $DisplayTitle -replace '[\r\n]+', ' '
+    $yamlTitle = ConvertTo-Json -InputObject $safeTitle -Compress
+    (Get-Content -LiteralPath $scriptPath -Raw) -replace '(?m)^title:.*$', "title: $yamlTitle" |
         Set-Content -LiteralPath $scriptPath -Encoding utf8
 
     Write-Host "Created project: $destination" -ForegroundColor Green
@@ -189,7 +199,10 @@ function New-KritaManuscript([string]$Name, [string]$PanelNumber) {
     if (-not (Test-Path -LiteralPath $selected)) { throw "Selected panel not found: $selected" }
     $settings = Get-Content -LiteralPath (Join-Path $projectPath 'project.json') -Raw | ConvertFrom-Json
     $imageTextPolicy = [string]$settings.image_text_policy
-    $requiresTextlessImage = $imageTextPolicy -match '^\s*(none|no-text|textless)\b'
+    if ($imageTextPolicy -notin @('textless', 'manual-krita-text')) {
+        throw "Invalid image_text_policy '$imageTextPolicy'. Use textless or manual-krita-text."
+    }
+    $requiresTextlessImage = $imageTextPolicy -eq 'textless'
     $templateName = if ($settings.page_template) { [string]$settings.page_template } else { [string]$Config.krita_template }
     $template = if ([System.IO.Path]::IsPathRooted($templateName)) {
         [System.IO.Path]::GetFullPath($templateName)
@@ -204,6 +217,11 @@ function New-KritaManuscript([string]$Name, [string]$PanelNumber) {
 
     $krita = Find-KritaConsole
     if (-not $krita) { throw 'Krita not found. Run doctor.' }
+    $runningKrita = @(Get-Process -Name 'krita' -ErrorAction SilentlyContinue)
+    if ($runningKrita.Count -gt 0) {
+        $ids = ($runningKrita.Id | Sort-Object) -join ', '
+        throw "Krita is already running (PID: $ids). Save and close it before hidden ORA-to-KRA conversion."
+    }
     $pages = Join-Path $projectPath 'pages'
     $manuscript = Join-Path $pages "$PanelNumber.kra"
     if (Test-Path -LiteralPath $manuscript) {
@@ -224,11 +242,18 @@ function New-KritaManuscript([string]$Name, [string]$PanelNumber) {
         if (Test-Path -LiteralPath $lineArt) {
             $prepareArguments += @('--line-art', $lineArt)
         }
+        $colorArt = Join-Path $projectPath "refs\$PanelNumber-color.png"
+        if (Test-Path -LiteralPath $colorArt) {
+            if (-not (Test-Path -LiteralPath $lineArt)) {
+                throw "Color art requires a matching line-art guide: $lineArt"
+            }
+            $prepareArguments += @('--color-art', $colorArt)
+        }
         $narration = Join-Path $projectPath "lettering\$PanelNumber.txt"
         if ($requiresTextlessImage -and (Test-Path -LiteralPath $narration)) {
             throw "Textless image policy forbids lettering input: $narration. Put prose in the post text."
         }
-        Invoke-UvPython -WithPackages @('pillow') -PythonArguments $prepareArguments
+        Invoke-UvPython -PythonArguments $prepareArguments
 
         $kritaArguments = @(
             ('"{0}"' -f $preparedOra),
@@ -334,6 +359,41 @@ function Invoke-ProductionValidation([string]$Name) {
     )
 }
 
+function New-VisualReviewReceipt(
+    [string]$Name,
+    [string]$PanelNumber,
+    [string]$ReviewerName,
+    [bool]$Confirmed
+) {
+    $projectPath = Get-ProjectPath $Name
+    if (-not (Test-Path -LiteralPath $projectPath)) { throw "Project not found: $projectPath" }
+    if ($PanelNumber -notmatch '^\d{3}$') { throw 'Panel must be three digits (example: 001).' }
+    if (-not $ReviewerName) { throw 'Reviewer is required.' }
+    if (-not $Confirmed) {
+        throw 'Inspect the selected PNG, KRA merged preview, and final export, then pass -ConfirmNoVisibleText.'
+    }
+    Invoke-UvPython -PythonArguments @(
+        (Resolve-RepoPath 'scripts\production_guard.py'),
+        'record-review',
+        '--project', $projectPath,
+        '--panel', $PanelNumber,
+        '--reviewer', $ReviewerName,
+        '--confirm-no-visible-text'
+    )
+}
+
+function Invoke-RepositoryCheck {
+    Invoke-UvPython -PythonArguments @(
+        (Resolve-RepoPath 'scripts\repo_check.py'),
+        '--root', $RepoRoot
+    )
+    Invoke-UvPython -PythonArguments @(
+        '-m', 'unittest', 'discover',
+        '-s', (Resolve-RepoPath 'tests'),
+        '-v'
+    )
+}
+
 function Show-Help {
     @'
 manga-system
@@ -343,7 +403,9 @@ manga-system
   .\manga.ps1 generate -Project first-manga -Panel 001 [-Model NAME] [-Seed 1234]
   .\manga.ps1 generate -Project first-manga -Panel 001 -ControlImage PATH [-ControlNet NAME]
   .\manga.ps1 compose -Project first-manga -Panel 001
+  .\manga.ps1 review -Project first-manga -Panel 001 -Reviewer NAME -ConfirmNoVisibleText
   .\manga.ps1 validate -Project first-manga
+  .\manga.ps1 check
 '@ | Write-Host
 }
 
@@ -357,6 +419,11 @@ switch ($Command) {
             -RequestedControlStrength $ControlStrength -RequestedSeed $Seed
     }
     'compose' { New-KritaManuscript -Name $Project -PanelNumber $Panel }
+    'review' {
+        New-VisualReviewReceipt -Name $Project -PanelNumber $Panel -ReviewerName $Reviewer `
+            -Confirmed $ConfirmNoVisibleText.IsPresent
+    }
     'validate' { Invoke-ProductionValidation -Name $Project }
+    'check' { Invoke-RepositoryCheck }
     default { Show-Help }
 }

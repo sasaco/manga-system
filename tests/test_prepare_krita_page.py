@@ -105,6 +105,55 @@ class PrepareKritaPageTests(unittest.TestCase):
             self.assertIn('name="AI素材"', stack)
             self.assertIn('visibility="hidden"', stack)
 
+    def test_flat_color_art_is_separate_below_visible_line_art(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            template = root / "template.ora"
+            art = root / "003.png"
+            line_art = root / "003-control.png"
+            color_art = root / "003-color.png"
+            output = root / "prepared.ora"
+            TEMPLATE.create_template(
+                template,
+                name="test",
+                width=120,
+                height=150,
+                dpi=144,
+                guide_rectangles=[],
+            )
+            Image.new("RGB", (80, 100), (170, 165, 160)).save(art)
+            guide = Image.new("RGB", (80, 100), "white")
+            for offset in range(3):
+                guide.putpixel((40 + offset, 50), (0, 0, 0))
+            guide.save(line_art)
+            colors = Image.new("RGBA", (80, 100), (0, 0, 0, 0))
+            for x in range(20, 60):
+                for y in range(30, 70):
+                    colors.putpixel((x, y), (153, 198, 198, 255))
+            colors.save(color_art)
+
+            PAGE.prepare_page(
+                template,
+                art,
+                output,
+                line_art=line_art,
+                color_art=color_art,
+            )
+
+            with zipfile.ZipFile(output) as archive:
+                color_layer = Image.open(io.BytesIO(archive.read("data/layer-03.png"))).convert("RGBA")
+                line_layer = Image.open(io.BytesIO(archive.read("data/layer-04.png"))).convert("RGBA")
+                merged = Image.open(io.BytesIO(archive.read("mergedimage.png"))).convert("RGBA")
+                text_layer = Image.open(io.BytesIO(archive.read("data/layer-01.png"))).convert("RGBA")
+                stack = archive.read("stack.xml").decode("utf-8")
+            self.assertIsNotNone(color_layer.getbbox())
+            self.assertIsNotNone(line_layer.getbbox())
+            self.assertIsNone(text_layer.getbbox())
+            self.assertIn('name="トーン・色"', stack)
+            self.assertLess(stack.index('name="線画"'), stack.index('name="トーン・色"'))
+            self.assertLess(stack.index('name="トーン・色"'), stack.index('name="AI素材"'))
+            self.assertNotEqual(merged.getpixel((60, 75)), (255, 255, 255, 255))
+
 
 if __name__ == "__main__":
     unittest.main()

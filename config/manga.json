@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "projects_dir": "projects",
   "krita_template": "templates/krita/instagram-portrait.ora",
   "workflow_policy": {
@@ -10,7 +10,16 @@
     "require_textless_generation_prompt": true,
     "require_krita_source": true,
     "krita_manuscript_format": "kra",
-    "require_krita_export": true
+    "require_krita_export": true,
+    "require_visual_review_receipt": true,
+    "ready_episode_statuses": ["ready", "complete", "published"],
+    "required_comfy_node_types": [
+      "CheckpointLoaderSimple",
+      "CLIPTextEncode",
+      "KSampler",
+      "VAEDecode",
+      "SaveImage"
+    ]
   },
   "comfy": {
     "server": "http://127.0.0.1:8188",
@@ -21,7 +30,7 @@
     "cfg": 6.5,
     "sampler": "dpmpp_2m",
     "scheduler": "karras",
-    "checkpoint": "",
+    "checkpoint": "v1-5-pruned-emaonly-fp16.safetensors",
     "negative_prompt": "low quality, blurry, bad anatomy, extra fingers, malformed hands, duplicate, text, letters, speech bubble, logo, watermark"
   }
 }

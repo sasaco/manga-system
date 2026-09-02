@@ -18,6 +18,7 @@ from PIL import Image, ImageOps
 
 AI_LAYER_NAME = "AI素材"
 LINE_LAYER_NAME = "線画"
+COLOR_LAYER_NAME = "トーン・色"
 TEXT_LAYER_NAME = "文字"
 
 
@@ -53,6 +54,7 @@ def prepare_page(
     output: Path,
     *,
     line_art: Path | None = None,
+    color_art: Path | None = None,
 ) -> None:
     """Create a populated ORA suitable for conversion to KRA by Krita."""
     template = template.resolve()
@@ -66,6 +68,8 @@ def prepare_page(
         raise FileExistsError(f"refusing to overwrite existing output: {output}")
     if output == template:
         raise ValueError("output must differ from the template")
+    if color_art and not line_art:
+        raise ValueError("color art requires separate line art")
 
     with zipfile.ZipFile(template) as source:
         entries = {item.filename: source.read(item) for item in source.infolist()}
@@ -78,7 +82,7 @@ def prepare_page(
         for element in stack.iter("layer")
         if "src" in element.attrib
     }
-    for required in (AI_LAYER_NAME, LINE_LAYER_NAME, TEXT_LAYER_NAME):
+    for required in (AI_LAYER_NAME, LINE_LAYER_NAME, COLOR_LAYER_NAME, TEXT_LAYER_NAME):
         if required not in layers:
             raise ValueError(f"template must contain a {required} paint layer")
     ai_source = layers[AI_LAYER_NAME].attrib["src"]
@@ -86,14 +90,33 @@ def prepare_page(
     with Image.open(art) as selected:
         ai_layer = _fit_art(selected, size)
     line_layer = Image.new("RGBA", size, (0, 0, 0, 0))
+    color_layer = Image.new("RGBA", size, (0, 0, 0, 0))
     if line_art:
         with Image.open(line_art) as clean_source:
             line_layer = _fit_line_art(clean_source, size)
         layers[AI_LAYER_NAME].set("visibility", "hidden")
+    if color_art:
+        with Image.open(color_art) as color_source:
+            color_layer = _fit_art(color_source, size)
+        color_element = layers[COLOR_LAYER_NAME]
+        line_element = layers[LINE_LAYER_NAME]
+        color_parent = next(
+            parent for parent in stack.iter("stack") if color_element in list(parent)
+        )
+        line_parent = next(
+            parent for parent in stack.iter("stack") if line_element in list(parent)
+        )
+        color_parent.remove(color_element)
+        line_index = list(line_parent).index(line_element)
+        line_parent.insert(line_index + 1, color_element)
+        color_element.set("composite-op", "svg:src-over")
     text_layer = Image.new("RGBA", size, (0, 0, 0, 0))
     with Image.open(io.BytesIO(entries["data/paper.png"])) as paper_image:
         paper = paper_image.convert("RGBA")
-    merged = Image.alpha_composite(paper, line_layer if line_art else ai_layer)
+    merged = paper
+    if color_art:
+        merged = Image.alpha_composite(merged, color_layer)
+    merged = Image.alpha_composite(merged, line_layer if line_art else ai_layer)
     merged = Image.alpha_composite(merged, text_layer)
 
     with Image.open(io.BytesIO(entries["Thumbnails/thumbnail.png"])) as old_thumbnail:
@@ -108,6 +131,7 @@ def prepare_page(
     replacements = {
         ai_source: _png_bytes(ai_layer),
         layers[LINE_LAYER_NAME].attrib["src"]: _png_bytes(line_layer),
+        layers[COLOR_LAYER_NAME].attrib["src"]: _png_bytes(color_layer),
         layers[TEXT_LAYER_NAME].attrib["src"]: _png_bytes(text_layer),
         "stack.xml": ET.tostring(stack, encoding="utf-8", xml_declaration=True),
         "mergedimage.png": _png_bytes(merged),
@@ -134,12 +158,14 @@ def main() -> None:
     parser.add_argument("--art", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--line-art", type=Path)
+    parser.add_argument("--color-art", type=Path)
     args = parser.parse_args()
     prepare_page(
         args.template,
         args.art,
         args.output,
         line_art=args.line_art,
+        color_art=args.color_art,
     )
 
 

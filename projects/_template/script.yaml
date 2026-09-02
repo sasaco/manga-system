@@ -6,17 +6,7 @@ pages:
     purpose: "導入"
     panels:
       - number: 1
-        shot: "場所と主人公が分かる引き"
-        action: ""
-        dialogue: ""
-        sfx: ""
-      - number: 2
-        shot: "表情が分かる寄り"
-        action: ""
-        dialogue: ""
-        sfx: ""
-      - number: 3
-        shot: "オチまたは次への引き"
+        shot: "1投稿で内容が伝わる1枚絵"
         action: ""
         dialogue: ""
         sfx: ""

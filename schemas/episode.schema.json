@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manga-system.local/schemas/episode.schema.json",
+  "title": "manga-system episode",
+  "type": "object",
+  "required": ["series", "episode", "status", "format", "panels"],
+  "properties": {
+    "series": { "type": "string", "minLength": 1 },
+    "episode": { "type": "integer", "minimum": 1 },
+    "year": { "type": "integer" },
+    "status": {
+      "enum": [
+        "draft",
+        "in-production",
+        "needs-comfy-regeneration",
+        "ready",
+        "complete",
+        "published"
+      ]
+    },
+    "platform": { "type": "string", "minLength": 1 },
+    "format": { "type": "string", "minLength": 1 },
+    "reference": { "type": "string", "minLength": 1 },
+    "panels": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["number", "purpose", "visual", "narration", "dialogue", "sfx"],
+        "properties": {
+          "number": { "type": "integer", "minimum": 1 },
+          "purpose": { "type": "string", "minLength": 1 },
+          "visual": { "type": "string", "minLength": 1 },
+          "narration": { "type": "string" },
+          "dialogue": { "type": "string" },
+          "sfx": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

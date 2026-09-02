@@ -11,6 +11,8 @@ venv/
 venv_win/
 env/
 .pytest_cache/
+.venv/
+.tmp/
 
 # Comfy の生成物と完成書き出しはローカル管理
 projects/*/panels/ai/*
