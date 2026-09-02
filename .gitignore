@@ -6,12 +6,20 @@ __pycache__/
 .Python
 output/
 temp/
-*.png
-*.jpg
-*.jpeg
-!characters/*.png
 .DS_Store
 venv/
 venv_win/
 env/
-docs/
+.pytest_cache/
+
+# Comfy の生成物と完成書き出しはローカル管理
+projects/*/panels/ai/*
+!projects/*/panels/ai/.gitkeep
+projects/*/export/*
+!projects/*/export/.gitkeep
+
+# Krita の自動保存・スワップ
+*.kra~
+*.ora~
+*.autosave
+*.swp

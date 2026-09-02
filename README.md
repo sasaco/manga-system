@@ -1,62 +1,55 @@
-# Instagram用マンガ自動生成システム
+# manga-system
 
-簡易YAMLを書くだけで、AIがマンガを自動生成します。
+Krita を仕上げ、Comfy Desktop / ComfyUI をローカル画像生成に使う、Windows 向けのマンガ制作リポジトリです。既存の Gemini 生成スクリプトも `scripts/` に残しています。
 
-## セットアップ
+## 最初に実行
 
-```bash
-# 仮想環境作成とパッケージインストール
-python -m venv venv_win
-venv_win\Scripts\activate
-pip install -r requirements.txt
+PowerShell でこのフォルダを開きます。
 
-# APIキー設定
-# .env ファイルに GOOGLE_API_KEY を設定
+```powershell
+.\manga.ps1 doctor
 ```
 
-## 使い方
+現在の PC では Krita 5.3.3 と Comfy Desktop 1.0.46、CUDA 対応 GPU、Comfy API を自動検出します。
 
-### 1. ストーリーYAMLを作成
+次に、作品フォルダを作ります。
 
-`stories/my_story.yaml`:
-```yaml
-story_title: "タイトル"
-layout_pattern: "pattern_3panel"
-
-scenes:
-  - character: TEN
-    emotion: 悩み
-    dialogue: "セリフ"
-    background: "背景"
-    description: "動作"
+```powershell
+.\manga.ps1 new -Project first-manga -Title "最初のマンガ"
+.\manga.ps1 open -Project first-manga
 ```
 
-### 2. 生成
+作成先は `projects/first-manga/` です。Krita 用ページ、脚本、プロンプト、参照画像、AI コマ、完成原稿が一作品の中にまとまります。
 
-```bash
-# YAML展開
-python3 scripts/expand_story.py stories/my_story.yaml
+## 1コマをローカル生成
 
-# マンガ生成
-venv_win/Scripts/python.exe scripts/generate_from_yaml.py stories/my_story_expanded.yaml
+Comfy Desktop でチェックポイントを1つ導入し、ComfyUI が起動している状態で実行します。
+
+```powershell
+.\manga.ps1 generate -Project first-manga -Panel 001
 ```
 
-出力先: `output/<年月>/<日付>/<セッション番号>/`
+`projects/first-manga/prompts/001.txt` を読み、6GB VRAM 向けの 768×1024 / 24 steps で生成します。結果は `projects/first-manga/panels/ai/` に保存され、Comfy のワークフロー情報も元画像に残ります。
 
-### 複数ページを同じフォルダにまとめる
+## 制作フロー
 
-```bash
-SESSION=5
-venv_win/Scripts/python.exe scripts/generate_from_yaml.py stories/page1_expanded.yaml --session-folder $SESSION
-venv_win/Scripts/python.exe scripts/generate_from_yaml.py stories/page2_expanded.yaml --session-folder $SESSION
+1. `script.yaml` でネームと台詞を決める
+2. `prompts/NNN.txt` を書き、Comfy で人物・背景・構図の素材を生成する
+3. Krita の `pages/001.ora` に AI 素材を置き、線画・修正・トーン・吹き出しを分離して仕上げる
+4. 完成物を `export/` に書き出す
+
+詳細は [docs/WORKFLOW.md](docs/WORKFLOW.md) を参照してください。
+
+## 主なコマンド
+
+```powershell
+.\manga.ps1 doctor                         # アプリ、GPU、API、モデルを診断
+.\manga.ps1 new -Project NAME -Title TITLE # 新規作品を作成
+.\manga.ps1 open -Project NAME             # Krita と Comfy Desktop を開く
+.\manga.ps1 generate -Project NAME -Panel 001
+.\manga.ps1 help
 ```
 
-## ドキュメント
+## 既存のクラウド生成
 
-- **🚨 次世代Claude Code必読:** [docs/HANDOFF.md](docs/HANDOFF.md)
-- **実行手順とルール:** [docs/STORY_CREATION_RULES.md](docs/STORY_CREATION_RULES.md)
-- **システム構造と改善ポイント:** [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)
-
----
-
-Made with ❤️ by TEN × Claude Code
+従来の YAML → Gemini 画像生成は引き続き利用できます。API キーを `.env` に設定し、`setup.ps1` / `generate.ps1` を使用してください。新規制作では、文字を AI 画像に直接描かせず、Krita で台詞を組むローカルファーストの流れを推奨します。
