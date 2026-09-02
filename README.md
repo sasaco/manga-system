@@ -1,6 +1,6 @@
 # manga-system
 
-Krita を仕上げ、Comfy Desktop / ComfyUI をローカル画像生成に使う、Windows 向けのマンガ制作リポジトリです。既存の Gemini 生成スクリプトも `scripts/` に残しています。
+Krita を仕上げ、Comfy Desktop / ComfyUI をローカル画像生成に使う、Windows 向けのマンガ制作リポジトリです。
 
 ## 最初に実行
 
@@ -40,6 +40,16 @@ Comfy Desktop でチェックポイントを1つ導入し、ComfyUI が起動し
 
 詳細は [docs/WORKFLOW.md](docs/WORKFLOW.md) を参照してください。
 
+## 完成前の必須ゲート
+
+完成・投稿可能と判断する前に、必ず制作ハーネスを実行します。
+
+```powershell
+.\manga.ps1 validate -Project first-manga
+```
+
+このゲートは、`panels/selected/` のPNGが対応するプロンプトを使ったComfy生成物であること、Kritaの編集可能な `.kra` / `.ora` 原稿があること、Kritaからの最終書き出しが `export/` にあることを検査します。Comfy用プロンプトへ文字を焼き込む指定も拒否します。1件でも違反があれば、その作品を完成扱いにしてはいけません。
+
 ## 主なコマンド
 
 ```powershell
@@ -47,9 +57,6 @@ Comfy Desktop でチェックポイントを1つ導入し、ComfyUI が起動し
 .\manga.ps1 new -Project NAME -Title TITLE # 新規作品を作成
 .\manga.ps1 open -Project NAME             # Krita と Comfy Desktop を開く
 .\manga.ps1 generate -Project NAME -Panel 001
+.\manga.ps1 validate -Project NAME         # Comfy → Krita 制作契約を検証
 .\manga.ps1 help
 ```
-
-## 既存のクラウド生成
-
-従来の YAML → Gemini 画像生成は引き続き利用できます。API キーを `.env` に設定し、`setup.ps1` / `generate.ps1` を使用してください。新規制作では、文字を AI 画像に直接描かせず、Krita で台詞を組むローカルファーストの流れを推奨します。

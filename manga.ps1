@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('doctor', 'new', 'open', 'generate', 'help')]
+    [ValidateSet('doctor', 'new', 'open', 'generate', 'validate', 'help')]
     [string]$Command = 'help',
     [string]$Project,
     [string]$Title,
@@ -16,6 +16,13 @@ $Config = Get-Content -LiteralPath (Join-Path $RepoRoot 'config\manga.json') -Ra
 
 function Resolve-RepoPath([string]$RelativePath) {
     return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $RelativePath))
+}
+
+function Invoke-UvPython([string[]]$PythonArguments) {
+    $uv = Get-Command uv -ErrorAction SilentlyContinue
+    if (-not $uv) { throw 'uv not found. Install uv or add it to PATH.' }
+    & $uv.Source run python @PythonArguments
+    if ($LASTEXITCODE -ne 0) { throw "uv Python command failed (exit $LASTEXITCODE)" }
 }
 
 function Find-Krita {
@@ -80,10 +87,12 @@ function Show-Doctor {
     $krita = Find-Krita
     $comfy = Find-ComfyDesktop
     $python = Find-ComfyPython
+    $uv = Get-Command uv -ErrorAction SilentlyContinue
     Write-Host 'manga-system doctor' -ForegroundColor Cyan
     Write-Host ("Krita:        {0}" -f $(if ($krita) { "OK  $krita" } else { 'NG  Not found' }))
     Write-Host ("Comfy Desktop:{0}" -f $(if ($comfy) { " OK  $comfy" } else { ' NG  Not found' }))
     Write-Host ("Python:       {0}" -f $(if ($python) { "OK  $python" } else { 'NG  Comfy/venv Python not found' }))
+    Write-Host ("uv:           {0}" -f $(if ($uv) { "OK  $($uv.Source)" } else { 'NG  Not found' }))
 
     if ($python) {
         $torch = & $python (Resolve-RepoPath 'scripts\comfy_probe.py') 2>&1
@@ -156,9 +165,12 @@ function Invoke-PanelGeneration([string]$Name, [string]$PanelNumber, [string]$Re
     if ($PanelNumber -notmatch '^\d{3}$') { throw 'Panel must be three digits (example: 001).' }
     $prompt = Join-Path $projectPath "prompts\$PanelNumber.txt"
     if (-not (Test-Path -LiteralPath $prompt)) { throw "Prompt not found: $prompt" }
-    $python = Find-ComfyPython
-    if (-not $python) { throw 'Python not found. Run doctor.' }
     if (-not $RequestedModel) { $RequestedModel = [string]$Config.comfy.checkpoint }
+
+    Invoke-UvPython -PythonArguments @(
+        (Resolve-RepoPath 'scripts\production_guard.py'),
+        'check-prompt', '--prompt', $prompt
+    )
 
     $arguments = @(
         (Resolve-RepoPath 'scripts\comfy_client.py'),
@@ -178,8 +190,16 @@ function Invoke-PanelGeneration([string]$Name, [string]$PanelNumber, [string]$Re
         '--scheduler', [string]$Config.comfy.scheduler
     )
     if ($RequestedModel) { $arguments += @('--model', $RequestedModel) }
-    & $python @arguments
-    if ($LASTEXITCODE -ne 0) { throw "Comfy generation failed (exit $LASTEXITCODE)" }
+    Invoke-UvPython -PythonArguments $arguments
+}
+
+function Invoke-ProductionValidation([string]$Name) {
+    $projectPath = Get-ProjectPath $Name
+    if (-not (Test-Path -LiteralPath $projectPath)) { throw "Project not found: $projectPath" }
+    Invoke-UvPython -PythonArguments @(
+        (Resolve-RepoPath 'scripts\production_guard.py'),
+        'validate', '--project', $projectPath
+    )
 }
 
 function Show-Help {
@@ -189,6 +209,7 @@ manga-system
   .\manga.ps1 new -Project first-manga -Title "My first manga"
   .\manga.ps1 open -Project first-manga
   .\manga.ps1 generate -Project first-manga -Panel 001 [-Model NAME] [-Seed 1234]
+  .\manga.ps1 validate -Project first-manga
 '@ | Write-Host
 }
 
@@ -197,5 +218,6 @@ switch ($Command) {
     'new' { New-MangaProject -Name $Project -DisplayTitle $Title }
     'open' { Open-MangaProject -Name $Project }
     'generate' { Invoke-PanelGeneration -Name $Project -PanelNumber $Panel -RequestedModel $Model -RequestedSeed $Seed }
+    'validate' { Invoke-ProductionValidation -Name $Project }
     default { Show-Help }
 }

@@ -64,6 +64,28 @@ projects/coffee-debug/
 
 印刷原稿を始める場合は、`project.json` の `page_template` を `b5-print-600dpi.ora` に変更してから新しいページを作るか、同テンプレートを Krita で直接開いてください。
 
+## 必須の制作ゲート
+
+このrepoの制作契約は **Comfyで画像生成し、Kritaで文字入れと仕上げを行う** ことです。Codex内蔵画像生成や外部生成画像を `panels/selected/` に直接置くことは禁止します。Comfyが利用できない場合は別方式へ自動フォールバックせず、制作を止めて不足しているAPI・モデル・起動状態を報告します。
+
+`prompts/NNN.txt` は画像素材専用です。必ず `no text` または `文字なし` を明記し、ナレーション・台詞・タイトルはKritaの `文字` レイヤーで追加します。
+
+完成前に次を実行します。
+
+```powershell
+.\manga.ps1 validate -Project PROJECT_NAME
+```
+
+検査内容:
+
+1. `project.json` が `generator: comfy` / `finisher: krita` を宣言している
+2. Comfy用プロンプトが文字生成を要求していない
+3. `panels/selected/NNN.png` に正しいComfy `prompt` メタデータが残り、対応する `prompts/NNN.txt` と一致する
+4. 編集可能な `pages/NNN.kra` または `pages/NNN.ora` に `AI素材`・`文字` レイヤーがある
+5. Kritaからの最終PNG/JPEGが `export/` にある
+
+1件でも失敗した場合は完成・投稿可能と判断しません。検査の回避、緩和、メタデータの偽造は禁止です。
+
 ## 既知の状態
 
 2026-09-02 時点で NVIDIA ドライバは 616.56、Comfy の Python は PyTorch 2.12.1+cu130 で、CUDA と RTX 3050 を正常認識し、Comfy API も `http://127.0.0.1:8188` で応答しています。CUDA Toolkit の別途インストールは不要です。現在の未完了項目はチェックポイントの導入だけです。

@@ -1,0 +1,17 @@
+series: "私の人生ストーリー"
+episode: 1
+year: 2001
+status: "ready"
+platform: "x.com"
+format: "one-post-one-panel"
+panels:
+  - number: 1
+    purpose: "社会人人生の始まりを紹介する"
+    visual: "白い空白背景。鞄とネクタイの若い棒人間が、製図板に向かう年上の棒人間の隣に立つ。机と製図板だけを記号的に描く。"
+    narration: |-
+      2001年、新卒で土木構造設計会社に入社した。
+      社員は、僕を入れてたったの2人。
+      そこは会社というより、親方と弟子の仕事場だった。
+      僕の社会人人生は、ここから始まった。
+    dialogue: ""
+    sfx: ""

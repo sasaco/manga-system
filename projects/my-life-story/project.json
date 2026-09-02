@@ -1,0 +1,17 @@
+{
+  "title": "私の人生ストーリー",
+  "slug": "my-life-story",
+  "created": "2026-09-02",
+  "platform": "x.com",
+  "publication": "daily",
+  "format": "one-post-one-panel",
+  "canvas": "portrait-4:5",
+  "page_template": "instagram-portrait.ora",
+  "reading_direction": "top-to-bottom",
+  "workflow": {
+    "generator": "comfy",
+    "finisher": "krita"
+  },
+  "series_bible": "SERIES_BIBLE.md",
+  "status": "needs-comfy-regeneration"
+}

@@ -2,6 +2,15 @@
   "version": 1,
   "projects_dir": "projects",
   "krita_template": "templates/krita/instagram-portrait.ora",
+  "workflow_policy": {
+    "generator": "comfy",
+    "finisher": "krita",
+    "allow_external_selected_images": false,
+    "require_comfy_png_metadata": true,
+    "require_textless_generation_prompt": true,
+    "require_krita_source": true,
+    "require_krita_export": true
+  },
   "comfy": {
     "server": "http://127.0.0.1:8188",
     "workflow": "templates/comfy/panel_txt2img_api.json",

@@ -4,5 +4,9 @@
   "created": "",
   "page_template": "instagram-portrait.ora",
   "reading_direction": "right-to-left",
+  "workflow": {
+    "generator": "comfy",
+    "finisher": "krita"
+  },
   "status": "name"
 }
