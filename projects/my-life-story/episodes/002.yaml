@@ -1,0 +1,16 @@
+series: "私の人生ストーリー"
+episode: 2
+year: 2001
+status: "ready"
+platform: "x.com"
+format: "one-post-one-panel"
+reference: "https://cc.musabi.ac.jp/zoukei_file/03/seizu/NewFiles/mojimoji.html"
+panels:
+  - number: 1
+    purpose: "最初の仕事として製図文字を練習したことを伝える"
+    visual: "白い空白背景。若い棒人間が傾いた製図板に向かい、薄い正方形の練習枠が並ぶ紙へ鉛筆で均一な線を繰り返し書いている。横に立つ年上の棒人間が、手本の紙と若い棒人間の練習紙を指し示す。製図板、鉛筆、定規だけを記号的に描く。"
+    narration: |-
+      最初に教えてもらったのは、図面に手書きする文字を練習すること
+      当時はまだ、手書きする工程が残ってました。2001年のことです
+    dialogue: ""
+    sfx: ""

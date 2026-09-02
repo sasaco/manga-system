@@ -52,15 +52,21 @@ projects/coffee-debug/
 
 ## Krita 仕上げ
 
-`.\manga.ps1 open -Project coffee-debug` で `pages/001.ora` と Comfy Desktop を開きます。
+採用画像を `panels/selected/001.png` に置いたあと、次を実行します。
 
-1. `.ora` をすぐ `.kra` として保存する
-2. `AI素材` に採用コマを配置する
-3. `ラフ` で構図を直す
-4. `線画` で顔・手・服・背景の破綻を修正する
-5. `トーン・色` と `効果` を調整する
-6. `フキダシ`、最後に `文字` を入れる
-7. `export/` に PNG/JPEG を書き出す
+```powershell
+.\manga.ps1 compose -Project coffee-debug -Panel 001
+.\manga.ps1 open -Project coffee-debug -Panel 001
+```
+
+`compose` は `.ora` テンプレートへ採用画像を配置し、Krita自身で正規の `pages/001.kra` に変換します。`.ora` は交換用テンプレートであり、編集原稿には使いません。
+
+1. `AI素材` に採用コマが表示されていることを確認する
+2. `ラフ` で構図を直す
+3. `線画` で顔・手・服・背景の破綻を修正する
+4. `トーン・色` と `効果` を調整する
+5. `フキダシ`、最後に `文字` を入れる
+6. `export/` に PNG/JPEG を書き出す
 
 印刷原稿を始める場合は、`project.json` の `page_template` を `b5-print-600dpi.ora` に変更してから新しいページを作るか、同テンプレートを Krita で直接開いてください。
 
@@ -81,7 +87,7 @@ projects/coffee-debug/
 1. `project.json` が `generator: comfy` / `finisher: krita` を宣言している
 2. Comfy用プロンプトが文字生成を要求していない
 3. `panels/selected/NNN.png` に正しいComfy `prompt` メタデータが残り、対応する `prompts/NNN.txt` と一致する
-4. 編集可能な `pages/NNN.kra` または `pages/NNN.ora` に `AI素材`・`文字` レイヤーがある
+4. 編集可能な正規の `pages/NNN.kra` に `AI素材`・`文字` レイヤーがある（`.ora` は不可）
 5. Kritaからの最終PNG/JPEGが `export/` にある
 
 1件でも失敗した場合は完成・投稿可能と判断しません。検査の回避、緩和、メタデータの偽造は禁止です。

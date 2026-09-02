@@ -3,6 +3,7 @@
   "slug": "_template",
   "created": "",
   "page_template": "instagram-portrait.ora",
+  "manuscript_format": "kra",
   "reading_direction": "right-to-left",
   "workflow": {
     "generator": "comfy",

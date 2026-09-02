@@ -9,6 +9,7 @@
     "require_comfy_png_metadata": true,
     "require_textless_generation_prompt": true,
     "require_krita_source": true,
+    "krita_manuscript_format": "kra",
     "require_krita_export": true
   },
   "comfy": {

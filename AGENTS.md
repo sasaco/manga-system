@@ -22,6 +22,8 @@
 - If Comfy is unavailable or has no usable checkpoint, stop and report the blocker. Do not silently fall back to another generator.
 - Comfy prompts are visual-only and must explicitly say `no text` or `文字なし`. Add narration, dialogue, and lettering only in Krita.
 - A file under `panels/selected/` must retain valid Comfy PNG `prompt` metadata matching `prompts/NNN.txt`.
-- A manga is not complete or publishable without an editable `pages/NNN.kra` or `pages/NNN.ora` and a final Krita export under `export/`.
+- Editable manuscripts must be `pages/NNN.kra`. `.ora` is only an interchange template and must not be treated as a finished manuscript.
+- After selecting a panel, run `.\manga.ps1 compose -Project <name> -Panel NNN` to place it on `AI素材` and create the `.kra` before opening Krita.
+- A manga is not complete or publishable without an editable `pages/NNN.kra` and a final Krita export under `export/`.
 - Before calling any manga artifact complete, run `.\manga.ps1 validate -Project <name>`. Any production-guard finding blocks completion.
 - Never bypass, weaken, waive, or fabricate the production guard or Comfy metadata to make a check pass.

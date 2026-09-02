@@ -41,10 +41,10 @@ def test_png(prompt: str | None = None) -> bytes:
 
 
 def write_krita_source(path: Path) -> None:
-    stack = b'<image><stack><layer name="AI\xe7\xb4\xa0\xe6\x9d\x90"/><layer name="\xe6\x96\x87\xe5\xad\x97"/></stack></image>'
+    document = b'<DOC><IMAGE><layer name="AI\xe7\xb4\xa0\xe6\x9d\x90"/><layer name="\xe6\x96\x87\xe5\xad\x97"/></IMAGE></DOC>'
     with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("mimetype", "image/openraster")
-        archive.writestr("stack.xml", stack)
+        archive.writestr("mimetype", "application/x-krita")
+        archive.writestr("maindoc.xml", document)
 
 
 class ProductionGuardTests(unittest.TestCase):
@@ -97,9 +97,16 @@ class ProductionGuardTests(unittest.TestCase):
             prompt_text = "minimal stick figures on white, no text"
             project = self.make_project(Path(directory), prompt_text)
             (project / "panels" / "selected" / "001.png").write_bytes(test_png(prompt_text))
-            write_krita_source(project / "pages" / "001.ora")
+            write_krita_source(project / "pages" / "001.kra")
             (project / "export" / "001.png").write_bytes(test_png())
             self.assertEqual(MODULE.validate_project(project), [])
+
+    def test_openraster_is_not_accepted_as_the_manuscript(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "001.ora"
+            source.write_bytes(b"not relevant")
+            findings = MODULE.validate_krita_source(source)
+            self.assertEqual([finding.code for finding in findings], ["KRITA_FORMAT_REQUIRED"])
 
 
 if __name__ == "__main__":

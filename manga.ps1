@@ -1,12 +1,15 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('doctor', 'new', 'open', 'generate', 'validate', 'help')]
+    [ValidateSet('doctor', 'new', 'open', 'generate', 'compose', 'validate', 'help')]
     [string]$Command = 'help',
     [string]$Project,
     [string]$Title,
     [string]$Panel = '001',
     [string]$Model = '',
+    [string]$ControlImage = '',
+    [string]$ControlNet = '',
+    [double]$ControlStrength = 1.0,
     [long]$Seed = -1
 )
 
@@ -18,10 +21,20 @@ function Resolve-RepoPath([string]$RelativePath) {
     return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $RelativePath))
 }
 
-function Invoke-UvPython([string[]]$PythonArguments) {
+function Invoke-UvPython {
+    param(
+        [string[]]$PythonArguments,
+        [string[]]$WithPackages = @()
+    )
     $uv = Get-Command uv -ErrorAction SilentlyContinue
     if (-not $uv) { throw 'uv not found. Install uv or add it to PATH.' }
-    & $uv.Source run python @PythonArguments
+    $uvArguments = @('run')
+    foreach ($package in $WithPackages) {
+        $uvArguments += @('--with', $package)
+    }
+    $uvArguments += 'python'
+    $uvArguments += $PythonArguments
+    & $uv.Source @uvArguments
     if ($LASTEXITCODE -ne 0) { throw "uv Python command failed (exit $LASTEXITCODE)" }
 }
 
@@ -46,6 +59,14 @@ function Find-Krita {
         if (Test-Path -LiteralPath $candidate) { return $candidate }
     }
     return $null
+}
+
+function Find-KritaConsole {
+    $gui = Find-Krita
+    if (-not $gui) { return $null }
+    $console = Join-Path (Split-Path -Parent $gui) 'krita.com'
+    if (Test-Path -LiteralPath $console) { return $console }
+    return $gui
 }
 
 function Find-ComfyDesktop {
@@ -136,20 +157,20 @@ function New-MangaProject {
     (Get-Content -LiteralPath $scriptPath -Raw) -replace '(?m)^title:.*$', "title: `"$DisplayTitle`"" |
         Set-Content -LiteralPath $scriptPath -Encoding utf8
 
-    $kritaTemplate = Resolve-RepoPath $Config.krita_template
-    if (-not (Test-Path -LiteralPath $kritaTemplate)) { throw "Krita template not found: $kritaTemplate" }
-    Copy-Item -LiteralPath $kritaTemplate -Destination (Join-Path $destination 'pages\001.ora')
     Write-Host "Created project: $destination" -ForegroundColor Green
-    Write-Host "Next: .\manga.ps1 open -Project $Name"
+    Write-Host "Next: generate/select a panel, then run .\manga.ps1 compose -Project $Name -Panel 001"
 }
 
-function Open-MangaProject([string]$Name) {
+function Open-MangaProject([string]$Name, [string]$PanelNumber) {
     $projectPath = Get-ProjectPath $Name
     if (-not (Test-Path -LiteralPath $projectPath)) { throw "Project not found: $projectPath" }
     $krita = Find-Krita
     if (-not $krita) { throw 'Krita not found. Run doctor.' }
-    $page = Join-Path $projectPath 'pages\001.kra'
-    if (-not (Test-Path -LiteralPath $page)) { $page = Join-Path $projectPath 'pages\001.ora' }
+    if ($PanelNumber -notmatch '^\d{3}$') { throw 'Panel must be three digits (example: 001).' }
+    $page = Join-Path $projectPath "pages\$PanelNumber.kra"
+    if (-not (Test-Path -LiteralPath $page)) {
+        throw "Krita manuscript not found: $page. Run compose first."
+    }
     Start-Process -FilePath $krita -ArgumentList @($page)
 
     if (-not (Get-Process -Name 'Comfy Desktop' -ErrorAction SilentlyContinue)) {
@@ -159,7 +180,92 @@ function Open-MangaProject([string]$Name) {
     Write-Host "Opened in Krita: $page"
 }
 
-function Invoke-PanelGeneration([string]$Name, [string]$PanelNumber, [string]$RequestedModel, [long]$RequestedSeed) {
+function New-KritaManuscript([string]$Name, [string]$PanelNumber) {
+    $projectPath = Get-ProjectPath $Name
+    if (-not (Test-Path -LiteralPath $projectPath)) { throw "Project not found: $projectPath" }
+    if ($PanelNumber -notmatch '^\d{3}$') { throw 'Panel must be three digits (example: 001).' }
+
+    $selected = Join-Path $projectPath "panels\selected\$PanelNumber.png"
+    if (-not (Test-Path -LiteralPath $selected)) { throw "Selected panel not found: $selected" }
+    $settings = Get-Content -LiteralPath (Join-Path $projectPath 'project.json') -Raw | ConvertFrom-Json
+    $templateName = if ($settings.page_template) { [string]$settings.page_template } else { [string]$Config.krita_template }
+    $template = if ([System.IO.Path]::IsPathRooted($templateName)) {
+        [System.IO.Path]::GetFullPath($templateName)
+    }
+    elseif ($templateName -match '[/\\]') {
+        Resolve-RepoPath $templateName
+    }
+    else {
+        Resolve-RepoPath (Join-Path 'templates\krita' $templateName)
+    }
+    if (-not (Test-Path -LiteralPath $template)) { throw "Krita template not found: $template" }
+
+    $krita = Find-KritaConsole
+    if (-not $krita) { throw 'Krita not found. Run doctor.' }
+    $pages = Join-Path $projectPath 'pages'
+    $manuscript = Join-Path $pages "$PanelNumber.kra"
+    if (Test-Path -LiteralPath $manuscript) {
+        throw "Refusing to overwrite an existing Krita manuscript: $manuscript"
+    }
+
+    $token = [guid]::NewGuid().ToString('N')
+    $preparedOra = Join-Path $pages ".$PanelNumber.compose-$token.ora"
+    $temporaryKra = Join-Path $pages ".$PanelNumber.compose-$token.kra"
+    try {
+        $prepareArguments = @(
+            (Resolve-RepoPath 'scripts\prepare_krita_page.py'),
+            '--template', $template,
+            '--art', $selected,
+            '--output', $preparedOra
+        )
+        $lineArt = Join-Path $projectPath "refs\$PanelNumber-control.png"
+        if (Test-Path -LiteralPath $lineArt) {
+            $prepareArguments += @('--line-art', $lineArt)
+        }
+        $narration = Join-Path $projectPath "lettering\$PanelNumber.txt"
+        if (Test-Path -LiteralPath $narration) {
+            $prepareArguments += @('--narration', $narration)
+        }
+        Invoke-UvPython -WithPackages @('pillow') -PythonArguments $prepareArguments
+
+        $kritaArguments = @(
+            ('"{0}"' -f $preparedOra),
+            '--nosplash',
+            '--export',
+            '--export-filename',
+            ('"{0}"' -f $temporaryKra)
+        )
+        $process = Start-Process -FilePath $krita -ArgumentList $kritaArguments -WindowStyle Hidden -PassThru
+        if (-not $process.WaitForExit(45000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            $null = $process.WaitForExit(5000)
+            throw 'Krita conversion timed out after 45 seconds.'
+        }
+        if ($process.ExitCode -ne 0) { throw "Krita conversion failed (exit $($process.ExitCode))." }
+        if (-not (Test-Path -LiteralPath $temporaryKra)) { throw 'Krita did not create the .kra manuscript.' }
+
+        Invoke-UvPython -PythonArguments @(
+            (Resolve-RepoPath 'scripts\production_guard.py'),
+            'check-krita', '--source', $temporaryKra
+        )
+        Move-Item -LiteralPath $temporaryKra -Destination $manuscript
+        Write-Host "Created editable Krita manuscript: $manuscript" -ForegroundColor Green
+    }
+    finally {
+        Remove-Item -LiteralPath $preparedOra -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $temporaryKra -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-PanelGeneration(
+    [string]$Name,
+    [string]$PanelNumber,
+    [string]$RequestedModel,
+    [string]$RequestedControlImage,
+    [string]$RequestedControlNet,
+    [double]$RequestedControlStrength,
+    [long]$RequestedSeed
+) {
     $projectPath = Get-ProjectPath $Name
     if (-not (Test-Path -LiteralPath $projectPath)) { throw "Project not found: $projectPath" }
     if ($PanelNumber -notmatch '^\d{3}$') { throw 'Panel must be three digits (example: 001).' }
@@ -172,10 +278,11 @@ function Invoke-PanelGeneration([string]$Name, [string]$PanelNumber, [string]$Re
         'check-prompt', '--prompt', $prompt
     )
 
+    $workflow = Resolve-RepoPath $Config.comfy.workflow
     $arguments = @(
         (Resolve-RepoPath 'scripts\comfy_client.py'),
         '--server', [string]$Config.comfy.server,
-        '--workflow', (Resolve-RepoPath $Config.comfy.workflow),
+        '--workflow', $workflow,
         '--prompt-file', $prompt,
         '--output-dir', (Join-Path $projectPath 'panels\ai'),
         '--project', $Name,
@@ -190,6 +297,23 @@ function Invoke-PanelGeneration([string]$Name, [string]$PanelNumber, [string]$Re
         '--scheduler', [string]$Config.comfy.scheduler
     )
     if ($RequestedModel) { $arguments += @('--model', $RequestedModel) }
+    if ($RequestedControlImage) {
+        $controlImagePath = if ([System.IO.Path]::IsPathRooted($RequestedControlImage)) {
+            [System.IO.Path]::GetFullPath($RequestedControlImage)
+        }
+        else {
+            Resolve-RepoPath $RequestedControlImage
+        }
+        if (-not (Test-Path -LiteralPath $controlImagePath)) {
+            throw "Control image not found: $controlImagePath"
+        }
+        $arguments[4] = Resolve-RepoPath 'templates\comfy\panel_controlnet_api.json'
+        $arguments += @(
+            '--control-image', $controlImagePath,
+            '--control-strength', [string]$RequestedControlStrength
+        )
+        if ($RequestedControlNet) { $arguments += @('--controlnet', $RequestedControlNet) }
+    }
     Invoke-UvPython -PythonArguments $arguments
 }
 
@@ -209,6 +333,8 @@ manga-system
   .\manga.ps1 new -Project first-manga -Title "My first manga"
   .\manga.ps1 open -Project first-manga
   .\manga.ps1 generate -Project first-manga -Panel 001 [-Model NAME] [-Seed 1234]
+  .\manga.ps1 generate -Project first-manga -Panel 001 -ControlImage PATH [-ControlNet NAME]
+  .\manga.ps1 compose -Project first-manga -Panel 001
   .\manga.ps1 validate -Project first-manga
 '@ | Write-Host
 }
@@ -216,8 +342,13 @@ manga-system
 switch ($Command) {
     'doctor' { Show-Doctor }
     'new' { New-MangaProject -Name $Project -DisplayTitle $Title }
-    'open' { Open-MangaProject -Name $Project }
-    'generate' { Invoke-PanelGeneration -Name $Project -PanelNumber $Panel -RequestedModel $Model -RequestedSeed $Seed }
+    'open' { Open-MangaProject -Name $Project -PanelNumber $Panel }
+    'generate' {
+        Invoke-PanelGeneration -Name $Project -PanelNumber $Panel -RequestedModel $Model `
+            -RequestedControlImage $ControlImage -RequestedControlNet $ControlNet `
+            -RequestedControlStrength $ControlStrength -RequestedSeed $Seed
+    }
+    'compose' { New-KritaManuscript -Name $Project -PanelNumber $Panel }
     'validate' { Invoke-ProductionValidation -Name $Project }
     default { Show-Help }
 }

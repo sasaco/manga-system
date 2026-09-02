@@ -174,19 +174,20 @@ def validate_comfy_png(path: Path, prompt_path: Path) -> list[Finding]:
 def _krita_layer_names(path: Path) -> set[str]:
     with zipfile.ZipFile(path) as archive:
         names = set(archive.namelist())
-        if "stack.xml" in names:
-            document = ET.fromstring(archive.read("stack.xml"))
-        elif "maindoc.xml" in names:
-            document = ET.fromstring(archive.read("maindoc.xml"))
-        else:
-            raise ValueError("neither stack.xml nor maindoc.xml exists")
+        if archive.read("mimetype") != b"application/x-krita":
+            raise ValueError("mimetype is not application/x-krita")
+        if "maindoc.xml" not in names:
+            raise ValueError("maindoc.xml does not exist")
+        document = ET.fromstring(archive.read("maindoc.xml"))
         return {element.attrib["name"] for element in document.iter() if "name" in element.attrib}
 
 
 def validate_krita_source(path: Path) -> list[Finding]:
+    if path.suffix.lower() != ".kra":
+        return [Finding("KRITA_FORMAT_REQUIRED", path, "editable manuscript must use Krita .kra format")]
     try:
         names = _krita_layer_names(path)
-    except (OSError, ValueError, zipfile.BadZipFile, ET.ParseError) as exc:
+    except (KeyError, OSError, ValueError, zipfile.BadZipFile, ET.ParseError) as exc:
         return [Finding("KRITA_SOURCE_INVALID", path, str(exc))]
     missing = sorted(REQUIRED_KRITA_LAYERS - names)
     if missing:
@@ -202,12 +203,12 @@ def validate_krita_source(path: Path) -> list[Finding]:
 
 def _page_source(project: Path, stem: str, one_panel_per_page: bool) -> Path | None:
     pages = project / "pages"
-    candidates = [pages / f"{stem}.kra", pages / f"{stem}.ora"]
+    candidates = [pages / f"{stem}.kra"]
     for candidate in candidates:
         if candidate.is_file():
             return candidate
     if not one_panel_per_page:
-        for suffix in ("*.kra", "*.ora"):
+        for suffix in ("*.kra",):
             match = next(iter(sorted(pages.glob(suffix))), None)
             if match:
                 return match
@@ -252,7 +253,7 @@ def validate_project(project: Path) -> list[Finding]:
                 Finding(
                     "KRITA_SOURCE_MISSING",
                     project / "pages" / f"{panel.stem}.kra",
-                    "selected panel has no matching editable Krita .kra/.ora source",
+                    "selected panel has no matching editable Krita .kra source",
                 )
             )
         else:
@@ -302,6 +303,8 @@ def parser() -> argparse.ArgumentParser:
     image = commands.add_parser("check-image", help="verify Comfy metadata and prompt identity")
     image.add_argument("--image", type=Path, required=True)
     image.add_argument("--prompt", type=Path, required=True)
+    source = commands.add_parser("check-krita", help="verify a layered Krita .kra manuscript")
+    source.add_argument("--source", type=Path, required=True)
     return result
 
 
@@ -313,6 +316,9 @@ def main() -> int:
     if args.command == "check-prompt":
         subject = args.prompt.resolve()
         return _print_result(validate_visual_prompt(subject), subject)
+    if args.command == "check-krita":
+        subject = args.source.resolve()
+        return _print_result(validate_krita_source(subject), subject)
     subject = args.image.resolve()
     findings = validate_visual_prompt(args.prompt.resolve())
     if not findings:

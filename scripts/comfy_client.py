@@ -62,10 +62,70 @@ def choose_checkpoint(server: str, requested: str | None) -> str:
     return choices[0]
 
 
+def available_controlnets(server: str) -> list[str]:
+    info = request_json(server, "/object_info/ControlNetLoader")
+    try:
+        values = info["ControlNetLoader"]["input"]["required"]["control_net_name"][0]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ComfyError("ComfyUI から ControlNet 一覧を取得できませんでした") from exc
+    return [str(value) for value in values]
+
+
+def choose_controlnet(server: str, requested: str | None) -> str:
+    choices = available_controlnets(server)
+    if not choices:
+        raise ComfyError("ControlNet モデルがありません。models/controlnet に導入してください。")
+    if requested:
+        if requested not in choices:
+            raise ComfyError(f"ControlNet '{requested}' が見つかりません。候補: {', '.join(choices)}")
+        return requested
+    return choices[0]
+
+
+def upload_image(server: str, path: Path) -> str:
+    path = path.resolve()
+    boundary = f"----manga-system-{uuid.uuid4().hex}"
+    newline = b"\r\n"
+    body = bytearray()
+
+    def field(name: str, value: str) -> None:
+        body.extend(f"--{boundary}".encode("ascii") + newline)
+        body.extend(f'Content-Disposition: form-data; name="{name}"'.encode("ascii") + newline + newline)
+        body.extend(value.encode("utf-8") + newline)
+
+    body.extend(f"--{boundary}".encode("ascii") + newline)
+    body.extend(
+        f'Content-Disposition: form-data; name="image"; filename="{path.name}"'.encode("utf-8")
+        + newline
+    )
+    body.extend(b"Content-Type: image/png" + newline + newline)
+    body.extend(path.read_bytes() + newline)
+    field("type", "input")
+    field("overwrite", "true")
+    body.extend(f"--{boundary}--".encode("ascii") + newline)
+
+    request = urllib.request.Request(
+        server.rstrip("/") + "/upload/image",
+        data=bytes(body),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise ComfyError(f"ControlNet 構図ガイドをアップロードできません: {path}\n{exc}") from exc
+    name = result.get("name")
+    if not name:
+        raise ComfyError(f"ComfyUI がアップロード名を返しませんでした: {result}")
+    subfolder = str(result.get("subfolder", "")).strip("/\\")
+    return f"{subfolder}/{name}" if subfolder else str(name)
+
+
 def build_workflow(
     template: dict[str, Any], *, checkpoint: str, prompt: str, negative: str,
     seed: int, width: int, height: int, steps: int, cfg: float,
-    sampler: str, scheduler: str, prefix: str,
+    sampler: str, scheduler: str, prefix: str, control_image: str = "",
+    controlnet: str = "", control_strength: float = 1.0,
 ) -> dict[str, Any]:
     workflow = json.loads(json.dumps(template))
     workflow["1"]["inputs"]["ckpt_name"] = checkpoint
@@ -76,6 +136,13 @@ def build_workflow(
         seed=seed, steps=steps, cfg=cfg, sampler_name=sampler, scheduler=scheduler
     )
     workflow["7"]["inputs"]["filename_prefix"] = prefix
+    if control_image:
+        try:
+            workflow["8"]["inputs"]["image"] = control_image
+            workflow["10"]["inputs"]["control_net_name"] = controlnet
+            workflow["11"]["inputs"]["strength"] = control_strength
+        except KeyError as exc:
+            raise ComfyError("ControlNet 用ワークフローに必要なノードがありません") from exc
     return workflow
 
 
@@ -111,6 +178,11 @@ def download_output(server: str, image: dict[str, str], destination: Path) -> No
 def generate(args: argparse.Namespace) -> list[Path]:
     template = json.loads(Path(args.workflow).read_text(encoding="utf-8"))
     checkpoint = choose_checkpoint(args.server, args.model or None)
+    control_image = ""
+    controlnet = ""
+    if args.control_image:
+        control_image = upload_image(args.server, Path(args.control_image))
+        controlnet = choose_controlnet(args.server, args.controlnet or None)
     seed = args.seed if args.seed >= 0 else random.SystemRandom().randrange(0, 2**63 - 1)
     workflow = build_workflow(
         template, checkpoint=checkpoint,
@@ -118,12 +190,15 @@ def generate(args: argparse.Namespace) -> list[Path]:
         negative=args.negative, seed=seed, width=args.width, height=args.height,
         steps=args.steps, cfg=args.cfg, sampler=args.sampler,
         scheduler=args.scheduler, prefix=f"manga/{args.project}_{args.panel}",
+        control_image=control_image, controlnet=controlnet,
+        control_strength=args.control_strength,
     )
     queued = request_json(args.server, "/prompt", {"prompt": workflow, "client_id": str(uuid.uuid4())})
     prompt_id = queued.get("prompt_id")
     if not prompt_id:
         raise ComfyError(f"ComfyUI が prompt_id を返しませんでした: {queued}")
-    print(f"生成開始: model={checkpoint}, seed={seed}, prompt_id={prompt_id}")
+    control_note = f", controlnet={controlnet}" if controlnet else ""
+    print(f"生成開始: model={checkpoint}{control_note}, seed={seed}, prompt_id={prompt_id}")
     images = wait_for_outputs(args.server, prompt_id, args.timeout)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -146,6 +221,9 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--project", required=True)
     result.add_argument("--panel", required=True)
     result.add_argument("--model", default="")
+    result.add_argument("--control-image", default="")
+    result.add_argument("--controlnet", default="")
+    result.add_argument("--control-strength", type=float, default=1.0)
     result.add_argument("--negative", default="")
     result.add_argument("--seed", type=int, default=-1)
     result.add_argument("--width", type=int, default=768)
