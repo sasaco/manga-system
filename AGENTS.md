@@ -17,12 +17,12 @@
 
 ## Mandatory character style for the current series
 
-- For `projects/my-life-story/`, treat `projects/my-life-story/refs/character-style-reference.webp` and the `固定画風` section of `SERIES_BIBLE.md` as the canonical visual-style references. Inspect them before writing a prompt, drawing a control image, or finishing a page.
+- For `projects/my-life-story/`, treat `projects/my-life-story/refs/character-style-reference.webp`, `projects/my-life-story/refs/dialogue-style-reference.webp`, and the `固定画風` section of `SERIES_BIBLE.md` as the canonical visual-style references. Inspect them before writing a prompt, drawing a control image, or finishing a page.
 - **Do not draw stick figures.** Do not use stickman, pictogram, circle-head-with-line-body, single-line torso, or independent single-line legs as character construction.
 - Build each person from an uneven oval face plus a rounded vertical bean/capsule body with visible area. Add only a few short hair strokes, dot or dash facial features, and the minimum clothing or prop shapes needed to identify the scene.
 - Arms may be simple, but they must read as short gestures attached to the body or as narrow outlined shapes, not as a skeletal network of line limbs. Legs should normally be absorbed into or omitted by the rounded body silhouette.
-- Use loose, slightly wobbly black outlines, generous white space, and a very small muted flat-color palette such as pale teal, mustard yellow, and warm gray. Do not use gradients, realistic lighting, dense hatching, detailed textures, or polished vector symmetry.
-- The style reference contains lettering, but `my-life-story` remains `textless`: copy only its character construction, line quality, spacing, and restrained colors. Never copy its words, speech balloons, sound effects, symbols, or punctuation into project images.
+- Use loose, slightly wobbly black outlines, generous white space, and a very small muted flat-color palette such as pale teal, mustard yellow, and warm gray. A sparse warm-gray fingerprint-like stipple may be used locally as an emotional shadow. Do not use gradients, realistic lighting, dense hatching, detailed textures, or polished vector symmetry.
+- `my-life-story` uses `manual-krita-text`: Comfy prompts and generated PNGs stay completely textless, while original episode dialogue, speech balloons, and sound effects may be added only during the Krita finishing pass on the `文字` and `フキダシ` layers. Never copy the words visible in either style reference.
 - Existing production descriptions that request stick figures are obsolete and must be rewritten before generating or revising that episode.
 
 ## Mandatory manga production harness
