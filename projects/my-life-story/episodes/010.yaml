@@ -1,0 +1,15 @@
+series: "私の人生ストーリー"
+episode: 10
+year: 2001
+status: "ready"
+platform: "x.com"
+format: "one-post-one-panel"
+panels:
+  - id: 1
+    prompt_file: "prompts/010.txt"
+    selected: "panels/selected/010.png"
+    page: "pages/010.kra"
+    export: "export/010.png"
+synopsis: |
+  徹夜で作業していた朝方、事務所のテレビが一斉に緊急ニュースを報道し始めた。
+  画面には9.11のニューヨーク世界貿易センタービルへの飛行機衝突映像が映し出された。
