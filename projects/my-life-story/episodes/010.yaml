@@ -1,15 +1,17 @@
 series: "私の人生ストーリー"
 episode: 10
 year: 2001
-status: "ready"
+status: "draft"
 platform: "x.com"
 format: "one-post-one-panel"
 panels:
-  - id: 1
-    prompt_file: "prompts/010.txt"
-    selected: "panels/selected/010.png"
-    page: "pages/010.kra"
-    export: "export/010.png"
-synopsis: |
-  徹夜で作業していた朝方、事務所のテレビが一斉に緊急ニュースを報道し始めた。
-  画面には9.11のニューヨーク世界貿易センタービルへの飛行機衝突映像が映し出された。
+  - number: 1
+    purpose: "徹夜中の朝方にテレビで9.11緊急ニュースが流れたショックを伝える"
+    visual: "白い背景。事務所の机で徹夜作業をしている主人公が、画面に世界貿易センタービルの映像が映し出されたテレビを驚いて見つめている。"
+    narration: |-
+      徹夜で作業してたある朝方、テレビが一斉に緊急ニュースを報道し始めました。
+      （徹夜作業の時にはテレビをつける会社でした）
+      緊急ニュース映像は、ニューヨークの貿易センタービルに飛行機が衝突するでした。
+    dialogue: "えっ…！？\nテレビで緊急ニュース…！？"
+    sfx: ""
+
