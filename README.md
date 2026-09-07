@@ -35,7 +35,7 @@ Comfy Desktop でチェックポイントを1つ導入し、ComfyUI が起動し
 1. `script.yaml` でネームと投稿文・台詞を決める
 2. `prompts/NNN.txt` を書き、Comfy で人物・背景・構図の素材を生成する
 3. 採用画像を `panels/selected/NNN.png` に置き、`.\manga.ps1 compose -Project first-manga -Panel NNN` で `pages/NNN.kra` を作る
-4. Kritaで `.kra` の線画・修正・トーンを分離して仕上げる。`manual-krita-text` の作品だけ文字・吹き出しを追加する
+4. Kritaで `.kra` の線画・修正・トーンを分離して仕上げる。`krita-text` の作品は、専用レイヤーに文字・吹き出しを自動または手作業で追加できる
 5. 完成物を `export/` に書き出す
 6. `textless` の作品は3つの画像を目視確認して review を記録し、最後に validate を通す
 

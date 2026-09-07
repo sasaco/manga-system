@@ -4,7 +4,7 @@
   "created": "",
   "page_template": "instagram-portrait.ora",
   "manuscript_format": "kra",
-  "image_text_policy": "manual-krita-text",
+  "image_text_policy": "krita-text",
   "reading_direction": "right-to-left",
   "workflow": {
     "generator": "comfy",

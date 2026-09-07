@@ -2,7 +2,7 @@
 
 ## 役割分担
 
-Comfy は「素材案を複数出す場所」、Krita は「正解を決めて完成原稿にする場所」です。生成画像は常に文字なしにします。`project.json` の `image_text_policy` が `manual-krita-text` の作品だけ、台詞や擬音をKritaで追加できます。`textless` の作品は完成画像にも文字を置きません。
+Comfy は「素材案を複数出す場所」、Krita は「正解を決めて完成原稿にする場所」です。生成画像は常に文字なしにします。`project.json` の `image_text_policy` が `krita-text` の作品だけ、台詞や擬音をKritaの専用レイヤーへ自動または手作業で追加できます。`textless` の作品は完成画像にも文字を置きません。
 
 ## 初回だけ行うこと
 
@@ -66,7 +66,7 @@ projects/coffee-debug/
 2. `ラフ` で構図を直す
 3. `線画` で顔・手・服・背景の破綻を修正する
 4. `トーン・色` と `効果` を調整する
-5. `manual-krita-text` の場合だけ、`フキダシ`、最後に `文字` を入れる。`textless` では両レイヤーを空のままにする
+5. `krita-text` の場合だけ、`フキダシ`、最後に `文字` を入れる。専用の仕上げ処理による自動作画も可。`textless` では両レイヤーを空のままにする
 6. `export/` に PNG/JPEG を書き出す
 
 印刷原稿を始める場合は、`project.json` の `page_template` を `b5-print-600dpi.ora` に変更してから新しいページを作るか、同テンプレートを Krita で直接開いてください。
@@ -75,7 +75,7 @@ projects/coffee-debug/
 
 このrepoの制作契約は **Comfyで画像生成し、Kritaでレイヤー仕上げを行う** ことです。Codex内蔵画像生成や外部生成画像を `panels/selected/` に直接置くことは禁止します。Comfyが利用できない場合は別方式へ自動フォールバックせず、制作を止めて不足しているAPI・モデル・起動状態を報告します。
 
-`prompts/NNN.txt` は画像素材専用です。必ず `no text` または `文字なし` を明記します。`manual-krita-text` ではナレーション・台詞・タイトルをKritaで追加し、`textless` では投稿文など画像外に置きます。
+`prompts/NNN.txt` は画像素材専用です。必ず `no text` または `文字なし` を明記します。`krita-text` ではナレーション・台詞・タイトルをKrita仕上げで `文字`、吹き出しを `フキダシ` に追加し、`textless` では投稿文など画像外に置きます。自動作画する場合もComfy素材とcompose処理には文字を入れません。
 
 `textless` の場合、採用PNG、KRA内の `mergedimage.png`、最終書き出しを読み取れる倍率で目視確認します。文字・数字・ロゴ・署名・透かしが1つでも見えたら修正またはComfy再生成し、確認が終わった後だけ記録します。
 

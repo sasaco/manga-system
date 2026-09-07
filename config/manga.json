@@ -5,6 +5,9 @@
   "workflow_policy": {
     "generator": "comfy",
     "finisher": "krita",
+    "image_text_policies": ["textless", "krita-text"],
+    "allow_automated_krita_lettering": true,
+    "krita_text_layers": ["\u6587\u5b57", "\u30d5\u30ad\u30c0\u30b7"],
     "allow_external_selected_images": false,
     "require_comfy_png_metadata": true,
     "require_textless_generation_prompt": true,

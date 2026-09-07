@@ -199,8 +199,9 @@ function New-KritaManuscript([string]$Name, [string]$PanelNumber) {
     if (-not (Test-Path -LiteralPath $selected)) { throw "Selected panel not found: $selected" }
     $settings = Get-Content -LiteralPath (Join-Path $projectPath 'project.json') -Raw | ConvertFrom-Json
     $imageTextPolicy = [string]$settings.image_text_policy
-    if ($imageTextPolicy -notin @('textless', 'manual-krita-text')) {
-        throw "Invalid image_text_policy '$imageTextPolicy'. Use textless or manual-krita-text."
+    $allowedTextPolicies = @($Config.workflow_policy.image_text_policies)
+    if ($imageTextPolicy -notin $allowedTextPolicies) {
+        throw "Invalid image_text_policy '$imageTextPolicy'. Use $($allowedTextPolicies -join ' or ')."
     }
     $requiresTextlessImage = $imageTextPolicy -eq 'textless'
     $templateName = if ($settings.page_template) { [string]$settings.page_template } else { [string]$Config.krita_template }

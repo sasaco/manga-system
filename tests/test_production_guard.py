@@ -107,7 +107,7 @@ class ProductionGuardTests(unittest.TestCase):
             "slug": "test-manga",
             "page_template": "instagram-portrait.ora",
             "manuscript_format": "kra",
-            "image_text_policy": "textless" if textless else "manual-krita-text",
+            "image_text_policy": "textless" if textless else "krita-text",
             "format": "one-post-one-panel",
             "workflow": {"generator": "comfy", "finisher": "krita"},
             "status": "draft",
@@ -128,6 +128,15 @@ class ProductionGuardTests(unittest.TestCase):
             self.assertIn("COMFY_METADATA_MISSING", codes)
             self.assertIn("KRITA_SOURCE_MISSING", codes)
             self.assertIn("KRITA_EXPORT_MISSING", codes)
+
+    def test_legacy_manual_krita_text_policy_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = self.make_project(Path(directory), "rounded bean characters, no text")
+            path = project / "project.json"
+            settings = json.loads(path.read_text(encoding="utf-8"))
+            settings["image_text_policy"] = "manual-krita-text"
+            findings = MODULE.validate_project_settings(settings, path)
+            self.assertIn("PROJECT_CONFIG_INVALID", {finding.code for finding in findings})
 
     def test_prompt_that_requests_baked_text_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

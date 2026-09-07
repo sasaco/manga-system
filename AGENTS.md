@@ -22,7 +22,7 @@
 - Build each person from an uneven oval face plus a rounded vertical bean/capsule body with visible area. Add only a few short hair strokes, dot or dash facial features, and the minimum clothing or prop shapes needed to identify the scene.
 - Arms may be simple, but they must read as short gestures attached to the body or as narrow outlined shapes, not as a skeletal network of line limbs. Legs should normally be absorbed into or omitted by the rounded body silhouette.
 - Use loose, slightly wobbly black outlines, generous white space, and a very small muted flat-color palette such as pale teal, mustard yellow, and warm gray. A sparse warm-gray fingerprint-like stipple may be used locally as an emotional shadow. Do not use gradients, realistic lighting, dense hatching, detailed textures, or polished vector symmetry.
-- `my-life-story` uses `manual-krita-text`: Comfy prompts and generated PNGs stay completely textless, while original episode dialogue, speech balloons, and sound effects may be added only during the Krita finishing pass on the `文字` and `フキダシ` layers. Never copy the words visible in either style reference.
+- `my-life-story` uses `krita-text`: Comfy prompts and generated PNGs stay completely textless, while original episode dialogue, speech balloons, and sound effects may be drawn automatically or manually during the Krita finishing pass on the `文字` and `フキダシ` layers. Never copy the words visible in either style reference.
 - Existing production descriptions that request stick figures are obsolete and must be rewritten before generating or revising that episode.
 
 ## Mandatory manga production harness
@@ -34,9 +34,9 @@
 - Do not use Codex built-in image generation, Gemini, or another external generator for a project asset unless the user explicitly changes the repository policy.
 - If Comfy is unavailable or has no usable checkpoint, stop and report the blocker. Do not silently fall back to another generator.
 - Comfy prompts are visual-only and must explicitly say `no text` or `文字なし`.
-- Every project must declare exactly one `image_text_policy`: `textless` or `manual-krita-text`.
+- Every project must declare exactly one `image_text_policy`: `textless` or `krita-text`.
 - Under `textless`, never put narration, dialogue, titles, sound effects, or lettering in the image or manuscript; keep the `文字` and `フキダシ` layers empty and publish prose outside the image.
-- Only `manual-krita-text` projects may add lettering manually in Krita. The compose helper must never inject lettering automatically.
+- Only `krita-text` projects may add lettering and speech balloons in Krita. A dedicated post-compose finishing step may draw them automatically, but it must keep lettering on `文字`, balloons on `フキダシ`, and generated Comfy assets unchanged. The compose helper itself remains text-free.
 - For a textless project, visually inspect the selected Comfy PNG, the KRA `mergedimage.png`, and the final export at readable scale; any visible glyph, number, logo, signature, or watermark blocks completion even when the required-empty layer checks pass.
 - After that three-artifact inspection, record it with `./manga.ps1 review -Project <name> -Panel NNN -Reviewer <name> -ConfirmNoVisibleText`. Never record a review based only on automated checks.
 - A file under `panels/selected/` must retain valid Comfy PNG `prompt` metadata matching `prompts/NNN.txt`.

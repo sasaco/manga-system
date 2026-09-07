@@ -16,7 +16,7 @@ Use Krita as the editable finishing environment. Preserve the artwork source and
 - This repository uses `uv`; run Python as `uv run python ...` or `uv run --with <package> python ...`.
 - The required production path is Comfy for generated artwork, then Krita for editing and export. Never substitute Codex image generation or another generator unless the user explicitly changes that policy.
 - Comfy prompts and generated artwork must be visual-only and say `no text` or `文字なし`. Preserve authentic Comfy PNG `prompt` metadata in `panels/selected/NNN.png`.
-- Read `config/manga.json` instead of assuming workflow settings. A project's `image_text_policy` must be either `textless` or `manual-krita-text`.
+- Read `config/manga.json` instead of assuming workflow settings. Use its `workflow_policy.image_text_policies` as the allowed values; the current lettering-enabled policy is `krita-text`.
 
 ## Manuscript workflow
 
@@ -24,7 +24,7 @@ Use Krita as the editable finishing environment. Preserve the artwork source and
 2. Run `.\manga.ps1 compose -Project <name> -Panel NNN` to place it on `AI素材` and create `pages/NNN.kra`.
 3. Treat `.ora` only as interchange. A finished editable manuscript must be `.kra` with Krita mimetype, `maindoc.xml`, and the expected editable layers.
 4. Keep source art on `AI素材`. Put manual corrections in `線画`, `効果`, `トーン・色`, `文字`, or `フキダシ` according to their purpose rather than flattening the source.
-5. Obey the project's text policy. Under `textless`, keep `文字` and `フキダシ` empty and keep every visible render free of glyphs, numbers, logos, signatures, and watermarks. Under `manual-krita-text`, add lettering only in Krita.
+5. Obey the project's text policy. Under `textless`, keep `文字` and `フキダシ` empty and keep every visible render free of glyphs, numbers, logos, signatures, and watermarks. Under `krita-text`, lettering and speech balloons may be drawn automatically or manually during post-compose Krita finishing. Keep lettering on `文字`, balloons on `フキダシ`, and never modify the selected Comfy PNG to add them.
 6. Export the finished page from Krita to the project's `export/` directory.
 7. For a textless page, inspect the selected PNG, KRA merged preview, and export at readable scale. Only after inspection, run `.\manga.ps1 review -Project <name> -Panel NNN -Reviewer <name> -ConfirmNoVisibleText`.
 8. Run `.\manga.ps1 validate -Project <name>` before calling the page complete. Report every production-guard failure; never weaken or fabricate a guard or PNG metadata.

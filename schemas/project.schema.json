@@ -23,7 +23,7 @@
     "page_template": { "type": "string", "minLength": 1 },
     "manuscript_format": { "const": "kra" },
     "image_text_policy": {
-      "enum": ["textless", "manual-krita-text"]
+      "enum": ["textless", "krita-text"]
     },
     "reading_direction": { "type": "string" },
     "workflow": {
@@ -49,4 +49,3 @@
   },
   "additionalProperties": true
 }
-

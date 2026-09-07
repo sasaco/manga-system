@@ -13,6 +13,9 @@
       "required": [
         "generator",
         "finisher",
+        "image_text_policies",
+        "allow_automated_krita_lettering",
+        "krita_text_layers",
         "allow_external_selected_images",
         "require_comfy_png_metadata",
         "require_textless_generation_prompt",
@@ -26,6 +29,27 @@
       "properties": {
         "generator": { "const": "comfy" },
         "finisher": { "const": "krita" },
+        "image_text_policies": {
+          "type": "array",
+          "items": { "enum": ["textless", "krita-text"] },
+          "minItems": 2,
+          "uniqueItems": true,
+          "allOf": [
+            { "contains": { "const": "textless" } },
+            { "contains": { "const": "krita-text" } }
+          ]
+        },
+        "allow_automated_krita_lettering": { "const": true },
+        "krita_text_layers": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "文字" },
+            { "const": "フキダシ" }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
         "allow_external_selected_images": { "const": false },
         "require_comfy_png_metadata": { "const": true },
         "require_textless_generation_prompt": { "const": true },
